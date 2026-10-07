@@ -4,6 +4,8 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 ## Features
 
+- Leads workspace: add, rename, search and remove potential clients by name. Leads are stored in Supabase separately from projects, with the same owner isolation and revision checks.
+
 - Project form with client, project title, release type, deadline and priority from 1–5.
 - Track counts and names for LPs and EPs. Singles automatically use their project title as the single song name, so the form hides the track list.
 - Per-project completion stages and per-song checkboxes with weighted progress.
@@ -52,3 +54,5 @@ The app no longer reads or writes Cloudflare D1. Historical D1 migrations remain
 - `tests/`: progress, ranking, redistribution and signature-security tests.
 
 The source repository is public. Client/project records and credentials are never committed. The deployed app remains private.
+
+Leads schema: `supabase/leads-schema.sql` (`public.studio_leads`). The signed gateway resource is `leads`; omitted resource continues to use projects.

@@ -1,4 +1,5 @@
 import {verifyGatewayRequest} from '../../../lib/gateway-auth.ts';
+import {LeadSchema} from '../../../lib/leads.ts';
 import {ProjectSchema} from '../../../lib/projects.ts';
 import publicKey from './public-key.json' with {type:'json'};
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
@@ -13,7 +14,8 @@ Deno.serve(async(req:Request)=>{
     const headers:Record<string,string>={apikey:secret,'Content-Type':'application/json',Prefer:'return=representation'};
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
     const query=new URLSearchParams({owner:'eq.'+claims.owner});
-    const endpoint=Deno.env.get('SUPABASE_URL')+'/rest/v1/studio_projects';
+    const isLead=claims.resource==='leads';
+    const endpoint=Deno.env.get('SUPABASE_URL')+'/rest/v1/'+(isLead?'studio_leads':'studio_projects');
     const action=claims.action;
     if(action==='list'){
       // Paginate to avoid silently losing records beyond the Data API's row limit.
@@ -22,25 +24,25 @@ Deno.serve(async(req:Request)=>{
       return reply(records);
     }
     if(action==='save'||action==='import'){
-      const parsed=ProjectSchema.safeParse(claims.project);
+      const parsed=(isLead?LeadSchema:ProjectSchema).safeParse(claims.project);
       if(!parsed.success)return reply({error:parsed.error.issues[0].message},400);
       const p=parsed.data;const revision=claims.revision;
       if(!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid revision'},400);
       if(revision===0||action==='import'){
         if(action==='import'){if(revision!<1)return reply({error:'Invalid revision'},400);query.set('on_conflict','owner,id');headers.Prefer='resolution=ignore-duplicates,return=representation';}
         const r=await fetch(endpoint+'?'+query,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:p.id,data:p,revision:action==='import'?revision:1})});
-        if(!r.ok)return reply({error:r.status===409?'Project already exists. Reload before editing.':'Unable to save project'},r.status===409?409:502);
+        if(!r.ok)return reply({error:r.status===409?'Record already exists. Reload before editing.':'Unable to save record'},r.status===409?409:502);
         return reply({...p,revision:action==='import'?revision:1});
       }
       query.set('id','eq.'+p.id);query.set('revision','eq.'+revision);
       const r=await fetch(endpoint+'?'+query,{method:'PATCH',headers,body:JSON.stringify({data:p,revision:revision!+1})});if(!r.ok)throw new Error('Database update failed');const rows=await r.json();
-      if(!rows.length)return reply({error:'This project changed in another tab. Reload before editing.'},409);
+      if(!rows.length)return reply({error:'This record changed in another tab. Reload before editing.'},409);
       return reply({...p,revision:revision!+1});
     }
     if(action==='delete'){
       if(typeof claims.id!=='string'||!Number.isInteger(claims.revision)||claims.revision!<1)return reply({error:'Invalid request'},400);
       query.set('id','eq.'+claims.id);query.set('revision','eq.'+claims.revision);
-      const r=await fetch(endpoint+'?'+query,{method:'DELETE',headers});if(!r.ok)throw new Error('Database delete failed');const rows=await r.json();return rows.length?reply({ok:true}):reply({error:'Project changed. Reload before deleting.'},409);
+      const r=await fetch(endpoint+'?'+query,{method:'DELETE',headers});if(!r.ok)throw new Error('Database delete failed');const rows=await r.json();return rows.length?reply({ok:true}):reply({error:'Record changed. Reload before deleting.'},409);
     }
     return reply({error:'Invalid action'},400);
   }catch{return reply({error:'Database unavailable. Please try again.'},502)}
