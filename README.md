@@ -4,6 +4,9 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 ## Features
 
+- New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus priority and deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
+- Graphs workspace displays every production project and overdub as a 0–100% completion bar, including finished work. Select a bar to open its project.
+
 - Leads workspace: add, rename, search and remove potential clients by name. Leads are stored in Supabase separately from projects, with the same owner isolation and revision checks.
 
 - Project form with client, project title, release type, deadline and priority from 1–5.

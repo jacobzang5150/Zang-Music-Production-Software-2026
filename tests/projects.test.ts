@@ -18,3 +18,22 @@ test('stage changes preserve earlier weights and total exactly 100',async()=>{
   for(let i=0;i<4;i++)for(let value=-10;value<=110;value+=5){const result=adjustStageWeight(stages,i,value);assert.equal(result.reduce((n,s)=>n+s.weight,0),100);assert.deepEqual(result.slice(0,i),stages.slice(0,i));assert(result.every(s=>s.weight>=0&&s.weight%5===0));}
   for(let i=0;i<5;i++)assert.equal(removeStage(stages,i).reduce((n,s)=>n+s.weight,0),100);
 });
+
+test('overdubs require guitar type and one song while production projects stay compatible',async()=>{
+ const {newOverdub}=await import('../lib/projects.ts');
+ const overdub={...newOverdub(),client:'Client',name:'Song',deadline:'2026-11-01'};overdub.songs[0].name='Song';
+ for(const guitarType of ['Acoustic','Electric','Both'])assert(ProjectSchema.safeParse({...overdub,guitarType}).success);
+ for(const bad of [{...overdub,guitarType:undefined},{...overdub,guitarType:'Bass'},{...overdub,songs:[...overdub.songs,{id:'other',name:'Other',completed:[]}]}])assert(!ProjectSchema.safeParse(bad).success);
+ assert(ProjectSchema.safeParse(p).success);
+ assert.equal(progress(overdub),0);
+ const firstDone={...overdub,songs:[{...overdub.songs[0],completed:[overdub.stages[0].id]}]};
+ assert.equal(progress(firstDone),10);assert(rankProjects([firstDone],now).length===1);
+});
+test('graph includes zero, complete and partial work across release types and overdubs',async()=>{
+ const {projectBars,newOverdub}=await import('../lib/projects.ts');
+ const od={...newOverdub(),name:'Overdub',client:'Client'};
+ const single={...p,id:'single',name:'Single',type:'Single' as const,songs:[{...p.songs[0],completed:['a','b']}]};
+ const lp={...p,id:'lp',name:'LP',type:'LP' as const};
+ const bars=projectBars([p,od,single,lp]);
+ assert.equal(bars.length,4);assert.equal(bars.find(x=>x.id===od.id)?.value,0);assert.equal(bars.find(x=>x.id==='single')?.value,100);assert.equal(bars.find(x=>x.id===p.id)?.value,35);assert.equal(bars.find(x=>x.id==='lp')?.value,35);
+});
