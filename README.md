@@ -4,8 +4,12 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 ## Features
 
+- Saved client dropdowns with a New client option. Supabase keeps a per-owner client directory, deduplicated by case-insensitive trimmed name; existing project and lead names are imported.
+- Delivered and Payment received checkboxes are independent of production progress. Undelivered work stays Active even at 100%. Delivered work remains in the Delivered/All tabs and graphs.
+- Delivery starts a 30-day payment clock, using a server-assigned UTC timestamp. The header bell shows persistent in-app alerts for overdue unpaid work, recalculated on load and every minute while open. Payment received clears the alert; undoing delivery clears its payment tracking. No email or browser push is sent.
+
 - Dark charcoal interface with red accents; client names lead cards, recommendations, project detail pages and graphs, with project/song titles secondary.
-- Both creation forms start with five unnamed stages weighted at 20% each. Enter the stage names and customize the weights; saved workflows are preserved when editing.
+- Production forms start with five unnamed stages weighted at 20% each. New overdubs start with Tracking (70%) and Revisions (30%). Enter the stage names and customize the weights; saved workflows are preserved when editing.
 - Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its priority and remaining-work weighting.
 
 - New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus priority and deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
@@ -17,7 +21,7 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 - Track counts and names for LPs and EPs. Singles automatically use their project title as the single song name, so the form hides the track list.
 - Per-project completion stages and per-song checkboxes with weighted progress.
 - Stage weights adjust in 5-point steps. Increasing a stage consumes weight from stages below it, starting with the next stage. Decreasing it gives weight to the next stage. Earlier stages never change. Inputs are capped by the available weight; the final stage is an automatic remainder. Zero-weight stages are allowed. Adding a stage starts it at zero; removing a stage transfers its weight to the next stage (or the new last stage).
-- Project progress averages all songs. Work queue: overdue projects first, then descending `priority × remaining song-equivalents / max(1, days remaining + 1)`. A song at 70% has 0.3 song-equivalents remaining. Ties use deadline then name. Completed projects leave the queue. Dates use the viewer's local calendar.
+- Project progress averages all songs. Work queue: overdue projects first, then descending `priority × remaining song-equivalents / max(1, days remaining + 1)`. A song at 70% has 0.3 song-equivalents remaining. Ties use deadline then name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.
 - Search, completed-project filter and revision checks to prevent silently overwriting simultaneous edits.
 
 ## Development
@@ -63,3 +67,5 @@ The app no longer reads or writes Cloudflare D1. Historical D1 migrations remain
 The source repository is public. Client/project records and credentials are never committed. The deployed app remains private.
 
 Leads schema: `supabase/leads-schema.sql` (`public.studio_leads`). The signed gateway resource is `leads`; omitted resource continues to use projects.
+
+Client directory schema: `supabase/clients-schema.sql`; repeat-safe data import: `supabase/backfill-clients.sql`. Client records are retained independently of project deletion. Delivery fields are stored in each project JSON document; server transition logic preserves timestamps across ordinary edits.
