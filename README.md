@@ -4,6 +4,10 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 ## Features
 
+- Dark charcoal interface with red accents; client names lead cards, recommendations, project detail pages and graphs, with project/song titles secondary.
+- Both creation forms start with five unnamed stages weighted at 20% each. Enter the stage names and customize the weights; saved workflows are preserved when editing.
+- Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its priority and remaining-work weighting.
+
 - New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus priority and deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
 - Graphs workspace displays every production project and overdub as a 0–100% completion bar, including finished work. Select a bar to open its project.
 

@@ -21,13 +21,13 @@ test('stage changes preserve earlier weights and total exactly 100',async()=>{
 
 test('overdubs require guitar type and one song while production projects stay compatible',async()=>{
  const {newOverdub}=await import('../lib/projects.ts');
- const overdub={...newOverdub(),client:'Client',name:'Song',deadline:'2026-11-01'};overdub.songs[0].name='Song';
+ const overdub={...newOverdub(),client:'Client',name:'Song',deadline:'2026-11-01'};overdub.songs[0].name='Song';overdub.stages=overdub.stages.map((s,i)=>({...s,name:'Stage '+(i+1)}));
  for(const guitarType of ['Acoustic','Electric','Both'])assert(ProjectSchema.safeParse({...overdub,guitarType}).success);
  for(const bad of [{...overdub,guitarType:undefined},{...overdub,guitarType:'Bass'},{...overdub,songs:[...overdub.songs,{id:'other',name:'Other',completed:[]}]}])assert(!ProjectSchema.safeParse(bad).success);
  assert(ProjectSchema.safeParse(p).success);
  assert.equal(progress(overdub),0);
  const firstDone={...overdub,songs:[{...overdub.songs[0],completed:[overdub.stages[0].id]}]};
- assert.equal(progress(firstDone),10);assert(rankProjects([firstDone],now).length===1);
+ assert.equal(progress(firstDone),20);assert(rankProjects([firstDone],now).length===1);
 });
 test('graph includes zero, complete and partial work across release types and overdubs',async()=>{
  const {projectBars,newOverdub}=await import('../lib/projects.ts');
@@ -36,4 +36,20 @@ test('graph includes zero, complete and partial work across release types and ov
  const lp={...p,id:'lp',name:'LP',type:'LP' as const};
  const bars=projectBars([p,od,single,lp]);
  assert.equal(bars.length,4);assert.equal(bars.find(x=>x.id===od.id)?.value,0);assert.equal(bars.find(x=>x.id==='single')?.value,100);assert.equal(bars.find(x=>x.id===p.id)?.value,35);assert.equal(bars.find(x=>x.id==='lp')?.value,35);
+});
+
+
+test('both creation forms start with five unnamed stages and balanced weights',async()=>{
+ const {newProject,newOverdub}=await import('../lib/projects.ts');
+ for(const factory of [newProject,newOverdub]){const draft=factory();assert.equal(draft.stages.length,5);assert(draft.stages.every(s=>s.name===''&&s.weight===20));assert.equal(new Set(draft.stages.map(s=>s.id)).size,5);}
+});
+test('missing deadlines are valid without invalid date calculations',()=>{
+ for(const deadline of ['',undefined]){const parsed=ProjectSchema.safeParse({...p,deadline});assert(parsed.success);if(parsed.success){assert.equal(parsed.data.deadline,'');assert.equal(daysLeft(parsed.data,now),Infinity);assert(Number.isFinite(score(parsed.data,now)));assert(score(parsed.data,now)>0);}}
+ const unscheduled={...p,id:'undated',deadline:''};const overdue={...p,id:'overdue',deadline:'2026-10-06'};
+ assert.equal(rankProjects([unscheduled,overdue],now)[0].id,'overdue');
+ assert.equal(rankProjects([unscheduled],now)[0].id,'undated');
+});
+test('graph ordering uses client names before project names',async()=>{
+ const {projectBars}=await import('../lib/projects.ts');
+ const bars=projectBars([{...p,id:'a',client:'Zed',name:'Alpha'},{...p,id:'b',client:'Amy',name:'Zebra'}]);assert.deepEqual(bars.map(x=>x.client),['Amy','Zed']);
 });
