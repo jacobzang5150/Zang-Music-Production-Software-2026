@@ -7,3 +7,14 @@ test('weighted completion and album average',()=>{assert.equal(songProgress(p,p.
 test('validates weights, type constraints, dates, priority and unknown stage IDs',()=>{assert(ProjectSchema.safeParse(p).success);for(const q of [{...p,stages:[{id:'a',name:'A',weight:50}]},{...p,type:'Single'},{...p,deadline:'2026-02-30'},{...p,deadline:'2026-99-99'},{...p,priority:6},{...p,songs:[{...p.songs[0],completed:['missing']}]}])assert(!ProjectSchema.safeParse(q).success)});
 test('deadline uses calendar days and ranking excludes completed work',()=>{assert.equal(daysLeft(p,now),3);assert.equal(score(p,now),3*1.3/4);const done={...p,id:'done',songs:p.songs.map(s=>({...s,completed:['a','b']}))};assert.deepEqual(rankProjects([done,p],now).map(p=>p.id),['p'])});
 test('overdue first, then priority / remaining work / deadline',()=>{const late={...p,id:'late',deadline:'2026-10-06',priority:1};const high={...p,id:'high',priority:5};const due={...p,id:'due',deadline:'2026-10-07'};assert.deepEqual(rankProjects([p,high,due,late],now).map(p=>p.id),['late','due','high','p']);assert.equal(rankProjects([{...p,id:'low',priority:1},high],now)[0].id,'high')});
+
+test('stage changes preserve earlier weights and total exactly 100',async()=>{
+  const {adjustStageWeight,removeStage}=await import('../lib/projects.ts');
+  const stages=[15,35,15,25,10].map((weight,i)=>({id:String(i),name:String(i),weight}));
+  assert.deepEqual(adjustStageWeight(stages,1,45).map(s=>s.weight),[15,45,5,25,10]);
+  assert.deepEqual(adjustStageWeight(stages,1,25).map(s=>s.weight),[15,25,25,25,10]);
+  assert.deepEqual(adjustStageWeight(stages,1,100).map(s=>s.weight),[15,85,0,0,0]);
+  assert.deepEqual(adjustStageWeight(stages,4,5),stages);
+  for(let i=0;i<4;i++)for(let value=-10;value<=110;value+=5){const result=adjustStageWeight(stages,i,value);assert.equal(result.reduce((n,s)=>n+s.weight,0),100);assert.deepEqual(result.slice(0,i),stages.slice(0,i));assert(result.every(s=>s.weight>=0&&s.weight%5===0));}
+  for(let i=0;i<5;i++)assert.equal(removeStage(stages,i).reduce((n,s)=>n+s.weight,0),100);
+});

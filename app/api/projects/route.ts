@@ -1,9 +1,16 @@
 import {z} from 'zod';
 import {getChatGPTUser} from '../../chatgpt-auth';
-import {getDb} from '@/db';
-import {projects} from '@/db/schema';
-import {and,eq} from 'drizzle-orm';
 import {ProjectSchema} from '@/lib/projects';
-export async function GET(){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to view projects.'},{status:401});const rows=await getDb().select().from(projects).where(eq(projects.owner,user.userId));return Response.json(rows.map(r=>({...JSON.parse(r.data),revision:r.revision})),{headers:{'Cache-Control':'no-store'}});}
-export async function PUT(req:Request){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to save projects.'},{status:401});try{const raw=await req.json();const revisionCheck=z.object({revision:z.number().int().min(0)}).safeParse(raw);if(!revisionCheck.success)return Response.json({error:"Invalid revision"},{status:400});const {revision}=revisionCheck.data;const parsed=ProjectSchema.safeParse(raw);if(!parsed.success)return Response.json({error:parsed.error.issues[0].message},{status:400});const p=parsed.data;const db=getDb();if(revision===0){await db.insert(projects).values({id:p.id,owner:user.userId,data:JSON.stringify(p),revision:1});return Response.json({...p,revision:1});}if(!Number.isInteger(revision)||revision<1)return Response.json({error:'Invalid revision'},{status:400});const result=await db.update(projects).set({data:JSON.stringify(p),revision:revision+1}).where(and(eq(projects.id,p.id),eq(projects.owner,user.userId),eq(projects.revision,revision))).returning();if(!result.length)return Response.json({error:'This project changed in another tab. Reload before editing.'},{status:409});return Response.json({...p,revision:revision+1});}catch{return Response.json({error:'Unable to save. Please try again.'},{status:500});}}
-export async function DELETE(req:Request){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in required'},{status:401});const parsed=z.object({id:z.string(),revision:z.number().int().positive()}).safeParse(await req.json());if(!parsed.success)return Response.json({error:"Invalid request"},{status:400});const {id,revision}=parsed.data;const result=await getDb().delete(projects).where(and(eq(projects.id,id),eq(projects.owner,user.userId),eq(projects.revision,revision))).returning();return result.length?Response.json({ok:true}):Response.json({error:'Project changed. Reload before deleting.'},{status:409});}
+import {callStudioDatabase} from '@/lib/supabase';
+async function respond(input:Parameters<typeof callStudioDatabase>[0]){
+  try{const response=await callStudioDatabase(input);return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch{return Response.json({error:'Could not connect to project storage. Please try again.'},{status:503})}
+}
+export async function GET(){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to view projects.'},{status:401});return respond({owner:user.userId,action:'list'});}
+export async function PUT(req:Request){
+  const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to save projects.'},{status:401});
+  try{const raw=await req.json();const revisionCheck=z.object({revision:z.number().int().min(0)}).safeParse(raw);const parsed=ProjectSchema.safeParse(raw);
+    if(!revisionCheck.success||!parsed.success)return Response.json({error:!parsed.success?parsed.error.issues[0].message:'Invalid revision'},{status:400});
+    return respond({owner:user.userId,action:'save',project:parsed.data,revision:revisionCheck.data.revision});
+  }catch{return Response.json({error:'Invalid project data'},{status:400})}
+}
+export async function DELETE(req:Request){const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in required'},{status:401});try{const parsed=z.object({id:z.string().min(1).max(80),revision:z.number().int().positive()}).safeParse(await req.json());if(!parsed.success)return Response.json({error:'Invalid request'},{status:400});return respond({owner:user.userId,action:'delete',...parsed.data});}catch{return Response.json({error:'Invalid request'},{status:400})}}
