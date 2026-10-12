@@ -54,6 +54,20 @@ test('graph ordering uses client names before project names',async()=>{
  const {projectBars}=await import('../lib/projects.ts');
  const bars=projectBars([{...p,id:'a',client:'Zed',name:'Alpha'},{...p,id:'b',client:'Amy',name:'Zebra'}]);assert.deepEqual(bars.map(x=>x.client),['Amy','Zed']);
 });
+test('graphs hide work only when both delivered and paid, for every project type',async()=>{
+ const {projectBars}=await import('../lib/projects.ts');
+ const deliveredAt='2026-10-12T00:00:00.000Z',paymentReceivedAt=deliveredAt;
+ for(const type of ['LP','EP','Single','Overdub'] as const){
+  const work={...p,type};
+  assert.equal(projectBars([work]).length,1);
+  assert.equal(projectBars([{...work,deliveredAt}]).length,1);
+  assert.equal(projectBars([{...work,paymentReceivedAt}]).length,1);
+  const paid={...work,deliveredAt,paymentReceivedAt};
+  assert.equal(projectBars([paid]).length,0);
+  assert.equal(projectBars([{...paid,paymentReceivedAt:null}]).length,1);
+  assert.equal(progress(paid),progress(work));
+ }
+});
 
 
 test('100% work stays active until delivered, independent of progress',()=>{

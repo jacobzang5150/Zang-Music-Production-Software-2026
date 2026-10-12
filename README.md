@@ -5,7 +5,7 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 ## Features
 
 - Saved client dropdowns with a New client option. Supabase keeps a per-owner client directory, deduplicated by case-insensitive trimmed name; existing project and lead names are imported.
-- Delivered and Payment received checkboxes are independent of production progress. Undelivered work stays Active even at 100%. Delivered work remains in the Delivered/All tabs and graphs.
+- Delivered and Payment received checkboxes are independent of production progress. Undelivered work stays Active even at 100%. Delivery and payment controls appear below all song completion stages. Delivered work remains in the Delivered/All tabs; graphs hide it only once payment is also received.
 - Delivery starts a 30-day payment clock, using a server-assigned UTC timestamp. The header bell shows persistent in-app alerts for overdue unpaid work, recalculated on load and every minute while open. Payment received clears the alert; undoing delivery clears its payment tracking. No email or browser push is sent.
 
 - Dark charcoal interface with red accents; client names lead cards, recommendations, project detail pages and graphs, with project/song titles secondary.
