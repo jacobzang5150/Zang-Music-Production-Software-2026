@@ -62,3 +62,10 @@ export function applyDeliveryTransition(previous:Project|undefined,incoming:Proj
   const paymentReceivedAt=deliveredAt&&incoming.paymentReceivedAt?(previous?.paymentReceivedAt||now.toISOString()):null;
   return {...incoming,deliveredAt,paymentReceivedAt};
 }
+
+// Reordering preserves stage identities, weights and all song completion references.
+export function moveStage(stages:Project['stages'],id:string,targetId:string){
+ const from=stages.findIndex(s=>s.id===id),to=stages.findIndex(s=>s.id===targetId);
+ if(from<0||to<0||from===to)return stages;
+ const next=[...stages];const [stage]=next.splice(from,1);next.splice(to,0,stage);return next;
+}

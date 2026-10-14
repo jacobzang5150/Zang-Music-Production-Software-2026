@@ -19,6 +19,7 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 - Project form with client, project title, release type, deadline and priority from 1–5.
 - Track counts and names for LPs and EPs. Singles automatically use their project title as the single song name, so the form hides the track list.
+- Drag stage handles to reorder in creation/edit forms or directly within a song; keyboard users can focus a handle and press Up/Down. Order is shared across songs and saves with the project. Stage weights and checked progress stay attached.
 - Per-project completion stages and per-song checkboxes with weighted progress.
 - Stage weights adjust in 5-point steps. Increasing a stage consumes weight from stages below it, starting with the next stage. Decreasing it gives weight to the next stage. Earlier stages never change. Inputs are capped by the available weight; the final stage is an automatic remainder. Zero-weight stages are allowed. Adding a stage starts it at zero; removing a stage transfers its weight to the next stage (or the new last stage).
 - Project progress averages all songs. Work queue: overdue projects first, then descending `priority × remaining song-equivalents / max(1, days remaining + 1)`. A song at 70% has 0.3 song-equivalents remaining. Ties use deadline then name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.

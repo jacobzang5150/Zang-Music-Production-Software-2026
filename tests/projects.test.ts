@@ -97,3 +97,18 @@ test('server delivery timestamps cannot be supplied or restarted by normal edits
  const reset=applyDeliveryTransition(paid,{...paid,deliveredAt:null,paymentReceivedAt:null},later);assert.equal(reset.deliveredAt,null);assert.equal(reset.paymentReceivedAt,null);
  assert(!ProjectSchema.safeParse({...p,paymentReceivedAt:later.toISOString()}).success);
 });
+
+test('stage reordering preserves weights and checked progress across songs',async()=>{
+ const {moveStage,adjustStageWeight}=await import('../lib/projects.ts');
+ const stages=[{id:'a',name:'Tracking',weight:70},{id:'b',name:'Editing',weight:20},{id:'c',name:'Mix',weight:10}];
+ const project={...p,stages};
+ const moved=moveStage(stages,'a','c');
+ assert.deepEqual(moved.map(s=>s.id),['b','c','a']);
+ assert.equal(moved[2],stages[0]);
+ assert.equal(progress({...project,stages:moved}),progress(project));
+ assert.deepEqual(stages.map(s=>s.id),['a','b','c']);
+ assert.deepEqual(moveStage(moved,'a','b'),stages);
+ assert.equal(moveStage(stages,'missing','a'),stages);
+ assert.equal(moveStage(stages,'a','a'),stages);
+ assert.deepEqual(adjustStageWeight(moved,1,20).map(s=>s.weight),[20,20,60]);
+});
