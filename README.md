@@ -12,7 +12,7 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 - Dark charcoal interface with red accents; client names lead cards, recommendations, project detail pages and graphs, with project/song titles secondary.
 - Production forms start with five unnamed stages weighted at 20% each. New overdubs start with Tracking (70%) and Revisions (30%). Enter the stage names and customize the weights; saved workflows are preserved when editing.
-- Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its priority and remaining-work weighting.
+- Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its priority and completion weighting.
 
 - New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus priority and deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
 - Graphs workspace displays every production project and overdub as a 0–100% completion bar, including finished work. Select a bar to open its project.
@@ -24,7 +24,7 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 - Drag stage handles to reorder in creation/edit forms or directly within a song; keyboard users can focus a handle and press Up/Down. Order is shared across songs and saves with the project. Stage weights and checked progress stay attached.
 - Per-project completion stages and per-song checkboxes with weighted progress.
 - Stage weights adjust in 5-point steps. Increasing a stage consumes weight from stages below it, starting with the next stage. Decreasing it gives weight to the next stage. Earlier stages never change. Inputs are capped by the available weight; the final stage is an automatic remainder. Zero-weight stages are allowed. Adding a stage starts it at zero; removing a stage transfers its weight to the next stage (or the new last stage).
-- Project progress averages all songs. Work queue: overdue projects first, then descending `priority × remaining song-equivalents / max(1, days remaining + 1)`. A song at 70% has 0.3 song-equivalents remaining. Ties use deadline then name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.
+- Project progress averages all songs. Work queue: overdue projects first, then descending `priority × (1 + 4 × completionFraction) / max(1, days remaining + 1)`. Completion is the project’s average song progress, with a bounded 1× boost at 0%, 3× at 50%, and 5× at 100%. Near-complete work is favored without a track-count advantage or division by zero at completion. Ties use deadline, client, then project name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.
 - Search, completed-project filter and revision checks to prevent silently overwriting simultaneous edits.
 
 ## Development

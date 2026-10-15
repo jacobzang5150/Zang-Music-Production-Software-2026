@@ -5,7 +5,14 @@ export type Project=z.infer<typeof ProjectSchema>;
 export function songProgress(p:Project,s:Project['songs'][number]){return p.stages.reduce((v,t)=>v+(s.completed.includes(t.id)?t.weight:0),0);}
 export function progress(p:Project){return p.songs.reduce((v,s)=>v+songProgress(p,s),0)/p.songs.length;}
 export function daysLeft(p:Project,today=new Date()){if(!p.deadline)return Infinity;const day=new Date(today.getFullYear(),today.getMonth(),today.getDate());const [y,m,d]=p.deadline.split('-').map(Number);return Math.round((Date.UTC(y,m-1,d)-Date.UTC(day.getFullYear(),day.getMonth(),day.getDate()))/86400000);}
-export function score(p:Project,today=new Date()){const remaining=p.songs.reduce((v,s)=>v+(100-songProgress(p,s))/100,0);if(remaining<.00001)return 0;const days=daysLeft(p,today);return p.priority*remaining/Math.max(1,(Number.isFinite(days)?days:30)+1);}
+// Favor finishing work: completion raises the multiplier from 1x to 5x.
+// Use the project's average completion so track count does not dominate the queue.
+export function score(p:Project,today=new Date()){
+ const completion=Math.max(0,Math.min(100,progress(p)))/100;
+ const completionBoost=1+4*completion;
+ const days=daysLeft(p,today);
+ return p.priority*completionBoost/Math.max(1,(Number.isFinite(days)?days:30)+1);
+}
 export function rankProjects(ps:Project[],today=new Date()){return [...ps].filter(p=>!p.deliveredAt).sort((a,b)=>{const da=daysLeft(a,today),db=daysLeft(b,today);return Number(db<0)-Number(da<0)||score(b,today)-score(a,today)||da-db||a.client.localeCompare(b.client)||a.name.localeCompare(b.name);});}
 
 /** Move a stage in 5-point steps, consuming/giving weight only below it. */
