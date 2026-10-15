@@ -173,3 +173,9 @@ input,select{max-width:100%}
  .mobile-keyboard-open .shell>aside{display:none}
  .mobile-keyboard-open .shell>main{padding-bottom:16px}
 }
+
+@media(max-width:900px){
+ .mobile-keyboard-open .modal[data-editing="true"] .modal-head,
+ .mobile-keyboard-open .modal[data-editing="true"] .modal-footer{display:none}
+ .mobile-keyboard-open .modal[data-editing="true"] .form-body{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:16px}
+}
