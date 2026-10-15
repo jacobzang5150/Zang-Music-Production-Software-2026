@@ -179,3 +179,13 @@ input,select{max-width:100%}
  .mobile-keyboard-open .modal[data-editing="true"] .modal-footer{display:none}
  .mobile-keyboard-open .modal[data-editing="true"] .form-body{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:16px}
 }
+
+.mobile-weight{display:none}
+@media(max-width:900px){
+ .stage-weight .desktop-weight{display:none}
+ .stage-input>.stage-weight{max-width:none;width:100%}
+ .mobile-weight{display:grid;grid-template-columns:44px minmax(36px,1fr) 44px;align-items:center;gap:4px;min-height:46px}
+ .stage-input .mobile-weight button{min-width:44px;min-height:44px;display:grid;place-items:center;padding:0;border:1px solid #714253;background:#38202c;color:#ffb2c3;border-radius:6px}
+ .stage-input .mobile-weight button:disabled{opacity:.35;cursor:default}
+ .mobile-weight output{text-align:center;font-size:15px;font-variant-numeric:tabular-nums;color:#f6d7e2}
+}
