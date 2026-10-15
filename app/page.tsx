@@ -32,6 +32,26 @@ useEffect(()=>{
  update();viewport.addEventListener('resize',update);viewport.addEventListener('scroll',update);
  return()=>{viewport.removeEventListener('resize',update);viewport.removeEventListener('scroll',update);document.documentElement.style.removeProperty('--dialog-height');document.documentElement.style.removeProperty('--dialog-top')};
 },[!!draft]);
+useEffect(()=>{
+ const viewport=window.visualViewport;
+ const mobile=window.matchMedia('(max-width:900px) and (any-pointer:coarse)');
+ let fullHeight=viewport?.height??window.innerHeight;
+ let frame=0;
+ const update=()=>{
+  const height=viewport?.height??window.innerHeight;
+  if(!viewport||viewport.scale===1)fullHeight=Math.max(fullHeight,height);
+  const focused=document.activeElement;
+  const editing=focused instanceof HTMLElement&&(focused.isContentEditable||focused.matches('textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="file"])'));
+  const open=mobile.matches&&editing&&(!viewport||Math.abs(viewport.scale-1)<.05)&&fullHeight-height>120;
+  document.documentElement.classList.toggle('mobile-keyboard-open',!!open);
+ };
+ const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(update)};
+ const rotate=()=>{fullHeight=viewport?.height??window.innerHeight;schedule()};
+ viewport?.addEventListener('resize',schedule);window.addEventListener('resize',schedule);
+ document.addEventListener('focusin',schedule);document.addEventListener('focusout',schedule);
+ window.addEventListener('orientationchange',rotate);mobile.addEventListener('change',schedule);
+ return()=>{cancelAnimationFrame(frame);viewport?.removeEventListener('resize',schedule);window.removeEventListener('resize',schedule);document.removeEventListener('focusin',schedule);document.removeEventListener('focusout',schedule);window.removeEventListener('orientationchange',rotate);mobile.removeEventListener('change',schedule);document.documentElement.classList.remove('mobile-keyboard-open')};
+},[]);
 useEffect(()=>{window.scrollTo({top:0,behavior:'instant'})},[view,selected]);
 function edit(p:RecordProject){setDraft(structuredClone(p));setFormError('')}
 return <div className="shell"><aside><a href="/" className="brand"><span className="brand-icon"><AudioLines size={24}/></span>session<span className="brand-dot">.</span></a><div className="workspace">YOUR WORKSPACE</div><nav aria-label="Workspace navigation">{[['Projects',LayoutGrid],['Work queue',ListOrdered],['Leads',Users],['Graphs',ChartNoAxesColumnIncreasing]].map(([label,Icon])=>{const I=Icon as typeof LayoutGrid;return <button aria-label={String(label)} aria-current={view===label?'page':undefined} key={String(label)} className={view===label?'nav active':'nav'} onClick={()=>{setView(String(label));setSelected(null)}}><I size={18}/>{String(label)}<span>{label==='Projects'?projects.length:label==='Work queue'?active.length:''}</span></button>})}</nav><div className="profile"><div className="avatar">JS</div><div>My studio<small>Personal workspace</small></div><span className="online"/></div></aside>

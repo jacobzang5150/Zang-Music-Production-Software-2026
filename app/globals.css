@@ -168,3 +168,8 @@ input,select{max-width:100%}
 }
 
 @media(max-width:380px){.project-actions{grid-template-columns:1fr}.modal-footer .primary,.modal-footer .secondary{font-size:13px;padding:10px}.content{padding-left:14px;padding-right:14px}}
+
+@media(max-width:900px){
+ .mobile-keyboard-open .shell>aside{display:none}
+ .mobile-keyboard-open .shell>main{padding-bottom:16px}
+}
