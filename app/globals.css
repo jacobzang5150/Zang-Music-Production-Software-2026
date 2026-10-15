@@ -189,3 +189,9 @@ input,select{max-width:100%}
  .stage-input .mobile-weight button:disabled{opacity:.35;cursor:default}
  .mobile-weight output{text-align:center;font-size:15px;font-variant-numeric:tabular-nums;color:#f6d7e2}
 }
+
+.deadline-field{min-width:0;display:flex;flex-direction:column;gap:6px}
+.deadline-field>label{display:flex;flex-direction:column;gap:8px}
+.remove-deadline{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 0;background:none;color:#f4a0b4;font-size:12px}
+.remove-deadline:hover{color:#ffd4de}
+@media(max-width:900px){.remove-deadline{min-height:44px;font-size:14px}}
