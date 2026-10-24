@@ -134,3 +134,30 @@ test('equal completion is ranked equally across project sizes and overdubs',()=>
  const album={...p,type:'LP' as const,songs:Array.from({length:12},(_,i)=>({...song,id:String(i)}))};
  assert.equal(score(single,now),score(overdub,now));assert.equal(score(album,now),score(single,now));
 });
+
+test('delivery and payment lifecycle controls Projects, Graphs and Work queue consistently',async()=>{
+ const {matchesProjectFilter,projectBars,isSettled}=await import('../lib/projects.ts');
+ for(const type of ['LP','EP','Single','Overdub'] as const){
+  const work={...p,type};
+  const delivered={...work,deliveredAt:now.toISOString()};
+  const paid={...delivered,paymentReceivedAt:now.toISOString()};
+  assert(matchesProjectFilter(work,'Active'));
+  assert(!matchesProjectFilter(work,'Delivered'));
+  assert(matchesProjectFilter(delivered,'Active'));
+  assert(matchesProjectFilter(delivered,'Delivered'));
+  assert.equal(projectBars([delivered]).length,1);
+  assert.equal(rankProjects([delivered],now).length,0);
+  assert(isSettled(paid));
+  assert(!matchesProjectFilter(paid,'Active'));
+  assert(!matchesProjectFilter(paid,'Delivered'));
+  assert(matchesProjectFilter(paid,'All'));
+  assert.equal(projectBars([paid]).length,0);
+  assert.equal(rankProjects([paid],now).length,0);
+  const unpaid={...paid,paymentReceivedAt:null};
+  assert(matchesProjectFilter(unpaid,'Active'));
+  assert(matchesProjectFilter(unpaid,'Delivered'));
+  assert.equal(projectBars([unpaid]).length,1);
+  const reopened={...unpaid,deliveredAt:null};
+  assert.equal(rankProjects([reopened],now).length,1);
+ }
+});

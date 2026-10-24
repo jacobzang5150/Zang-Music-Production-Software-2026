@@ -43,7 +43,13 @@ export function newOverdub(idFactory:()=>string=()=>crypto.randomUUID()):Project
     stages:[{id:idFactory(),name:'Tracking',weight:70},{id:idFactory(),name:'Revisions',weight:30}],
     songs:[{id:idFactory(),name:'',completed:[]}]};
 }
-export function projectBars(projects:Project[]){return projects.filter(p=>!(p.deliveredAt&&p.paymentReceivedAt)).sort((a,b)=>a.client.localeCompare(b.client)||a.name.localeCompare(b.name)).map(p=>({id:p.id,name:p.name,client:p.client,type:p.type,value:progress(p)}));}
+export function isSettled(p:Project){return !!(p.deliveredAt&&p.paymentReceivedAt);}
+export function matchesProjectFilter(p:Project,filter:string){
+ if(filter==='All')return true;
+ if(isSettled(p))return false;
+ return filter==='Delivered'?!!p.deliveredAt:true;
+}
+export function projectBars(projects:Project[]){return projects.filter(p=>!isSettled(p)).sort((a,b)=>a.client.localeCompare(b.client)||a.name.localeCompare(b.name)).map(p=>({id:p.id,name:p.name,client:p.client,type:p.type,value:progress(p)}));}
 
 export function blankStages(idFactory:()=>string=()=>crypto.randomUUID()):Project['stages']{
   return Array.from({length:5},()=>({id:idFactory(),name:'',weight:20}));
