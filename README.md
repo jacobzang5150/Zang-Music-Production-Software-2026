@@ -4,6 +4,8 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 ## Features
 
+- Workspace tabs and project details have browser-history URLs. Browser Back/Forward, mouse navigation buttons and refresh restore the selected page. Open forms prompt before leaving through history; progress updates do not create extra navigation entries.
+
 - Mobile workspace with labeled bottom navigation, safe-area spacing, larger touch controls, stacked graphs and full-screen forms that follow the visible keyboard viewport. Stage dragging scrolls long pages/forms near their edges. Notification panels dismiss when tapping outside.
 
 - Saved client dropdowns with a New client option. Supabase keeps a per-owner client directory, deduplicated by case-insensitive trimmed name; existing project and lead names are imported.
