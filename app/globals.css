@@ -195,3 +195,6 @@ input,select{max-width:100%}
 .remove-deadline{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 0;background:none;color:#f4a0b4;font-size:12px}
 .remove-deadline:hover{color:#ffd4de}
 @media(max-width:900px){.remove-deadline{min-height:44px;font-size:14px}}
+
+.payment-burst{position:fixed;width:0;height:0;z-index:10001;pointer-events:none;user-select:none}
+.payment-dollar{position:absolute;left:0;top:0;font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;line-height:1;text-shadow:0 0 12px #e2384566;will-change:transform,opacity}
