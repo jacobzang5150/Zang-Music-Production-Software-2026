@@ -141,23 +141,37 @@ test('delivery and payment lifecycle controls Projects, Graphs and Work queue co
   const work={...p,type};
   const delivered={...work,deliveredAt:now.toISOString()};
   const paid={...delivered,paymentReceivedAt:now.toISOString()};
-  assert(matchesProjectFilter(work,'Active'));
-  assert(!matchesProjectFilter(work,'Delivered'));
-  assert(matchesProjectFilter(delivered,'Active'));
-  assert(matchesProjectFilter(delivered,'Delivered'));
+  assert(matchesProjectFilter(work,'Ongoing'));
+  assert(!matchesProjectFilter(work,'Awaiting payment'));
+  assert(matchesProjectFilter(delivered,'Ongoing'));
+  assert(matchesProjectFilter(delivered,'Awaiting payment'));
   assert.equal(projectBars([delivered]).length,1);
   assert.equal(rankProjects([delivered],now).length,0);
   assert(isSettled(paid));
-  assert(!matchesProjectFilter(paid,'Active'));
-  assert(!matchesProjectFilter(paid,'Delivered'));
-  assert(matchesProjectFilter(paid,'All'));
+  assert(!matchesProjectFilter(paid,'Ongoing'));
+  assert(!matchesProjectFilter(paid,'Awaiting payment'));
+  assert(matchesProjectFilter(paid,'Completed'));
   assert.equal(projectBars([paid]).length,0);
   assert.equal(rankProjects([paid],now).length,0);
   const unpaid={...paid,paymentReceivedAt:null};
-  assert(matchesProjectFilter(unpaid,'Active'));
-  assert(matchesProjectFilter(unpaid,'Delivered'));
+  assert(matchesProjectFilter(unpaid,'Ongoing'));
+  assert(matchesProjectFilter(unpaid,'Awaiting payment'));
   assert.equal(projectBars([unpaid]).length,1);
   const reopened={...unpaid,deliveredAt:null};
   assert.equal(rankProjects([reopened],now).length,1);
  }
+});
+
+test('Completed contains only delivered and paid work ordered by most recent completion',async()=>{
+ const {matchesProjectFilter,compareCompletedProjects}=await import('../lib/projects.ts');
+ const paid=(id:string,paymentReceivedAt:string):Project=>({...p,id,deliveredAt:'2026-10-01T00:00:00.000Z',paymentReceivedAt});
+ const older=paid('older','2026-10-04T12:00:00.000Z');
+ const newer=paid('newer','2026-10-25T12:00:00.000Z');
+ const middle=paid('middle','2026-10-20T12:00:00.000Z');
+ const unpaid={...p,deliveredAt:'2026-10-26T12:00:00.000Z'};
+ const records=[older,p,newer,unpaid,middle].filter(x=>matchesProjectFilter(x,'Completed')).sort(compareCompletedProjects);
+ assert.deepEqual(records.map(x=>x.id),['newer','middle','older']);
+ assert(!matchesProjectFilter({...newer,paymentReceivedAt:null},'Completed'));
+ assert(!matchesProjectFilter({...newer,deliveredAt:null},'Completed'));
+ assert(compareCompletedProjects({...older,deliveredAt:'2026-10-26T12:00:00.000Z'},newer)<0);
 });

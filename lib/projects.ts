@@ -45,9 +45,9 @@ export function newOverdub(idFactory:()=>string=()=>crypto.randomUUID()):Project
 }
 export function isSettled(p:Project){return !!(p.deliveredAt&&p.paymentReceivedAt);}
 export function matchesProjectFilter(p:Project,filter:string){
- if(filter==='All')return true;
+ if(filter==='Completed')return isSettled(p);
  if(isSettled(p))return false;
- return filter==='Delivered'?!!p.deliveredAt:true;
+ return filter==='Awaiting payment'?!!p.deliveredAt:true;
 }
 export function projectBars(projects:Project[]){return projects.filter(p=>!isSettled(p)).sort((a,b)=>a.client.localeCompare(b.client)||a.name.localeCompare(b.name)).map(p=>({id:p.id,name:p.name,client:p.client,type:p.type,value:progress(p)}));}
 
@@ -81,4 +81,12 @@ export function moveStage(stages:Project['stages'],id:string,targetId:string){
  const from=stages.findIndex(s=>s.id===id),to=stages.findIndex(s=>s.id===targetId);
  if(from<0||to<0||from===to)return stages;
  const next=[...stages];const [stage]=next.splice(from,1);next.splice(to,0,stage);return next;
+}
+
+// Completion occurs when delivery and payment have both been recorded.
+export function completionTime(p:Project){
+ return Math.max(Date.parse(p.deliveredAt||'')||0,Date.parse(p.paymentReceivedAt||'')||0);
+}
+export function compareCompletedProjects(a:Project,b:Project){
+ return completionTime(b)-completionTime(a)||a.client.localeCompare(b.client)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id);
 }
