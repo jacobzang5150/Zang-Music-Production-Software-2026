@@ -197,4 +197,4 @@ input,select{max-width:100%}
 @media(max-width:900px){.remove-deadline{min-height:44px;font-size:14px}}
 
 .payment-burst{position:fixed;width:0;height:0;z-index:10001;pointer-events:none;user-select:none}
-.payment-dollar{position:absolute;left:0;top:0;font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;line-height:1;text-shadow:0 0 12px #e2384566;will-change:transform,opacity}
+.payment-dollar{position:absolute;left:0;top:0;font-family:'Space Grotesk',sans-serif;font-size:clamp(38px,5vw,52px);font-weight:700;line-height:1;text-shadow:0 0 18px #e2384599,0 0 36px #ef4b5c55;will-change:transform,opacity}

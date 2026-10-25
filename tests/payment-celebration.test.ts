@@ -19,7 +19,7 @@ test('payment burst waits for completion, cleans up, and handles reduced motion 
    const checkbox={isConnected:true,getBoundingClientRect:()=>({left:10,top:20,width:20,height:20})} as HTMLElement;
    let complete=false;
    const result=playPaymentBurst(checkbox).then(value=>{complete=true;return value});
-   if(mode!=='unsupported'){await Promise.resolve();assert.equal(complete,false);assert.equal(animations.length,mode==='reduced'?1:14);resolve();}
+   if(mode!=='unsupported'){await Promise.resolve();assert.equal(complete,false);assert.equal(animations.length,mode==='reduced'?1:24);resolve();}
    assert.equal(await result,true);assert(removed);
    assert.equal(nodes[0].style.left,'20px');assert.equal(nodes[0].style.top,'30px');
    assert.equal(await playPaymentBurst({isConnected:false} as HTMLElement),false);
