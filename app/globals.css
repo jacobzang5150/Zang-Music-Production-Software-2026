@@ -203,11 +203,9 @@ input,select{max-width:100%}
 .project-heading .project-identity{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
 .project-notes{flex:1.5 1 300px;max-width:560px;min-width:0}
 .project-notes label{display:block;font-size:13px;font-weight:600;margin-bottom:8px;color:#e8e2e4}
-.project-notes label span{font-weight:400;color:#938b91;margin-left:5px}
 .project-notes textarea{display:block;width:100%;min-height:96px;resize:vertical;border:1px solid #363039;border-radius:10px;background:#18151b;color:#eee8ed;padding:12px 14px;font:inherit;font-size:14px;line-height:1.5;box-sizing:border-box}
 .project-notes textarea:focus{outline:2px solid #ef4b5c;outline-offset:2px}
 .project-notes textarea::placeholder{color:#928892}
 .notes-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
 .notes-actions>span{font-size:12px;color:#a89da5}
-.notes-actions .secondary{padding:7px 12px;font-size:12px;min-height:36px}
-@media(max-width:900px){.project-heading .project-identity{flex-basis:100%}.project-notes{flex-basis:100%;max-width:none}.project-notes textarea{font-size:16px}.notes-actions .secondary{min-height:44px}}
+@media(max-width:900px){.project-heading .project-identity{flex-basis:100%}.project-notes{flex-basis:100%;max-width:none}.project-notes textarea{font-size:16px}}
