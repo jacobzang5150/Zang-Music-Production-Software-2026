@@ -8,7 +8,7 @@ export default function DeliverablesLink({url,busy,onSave}:{url:string;busy:bool
  const [editing,setEditing]=useState(false),[draft,setDraft]=useState(url),[error,setError]=useState('');
  function edit(){setDraft(url);setError('');setEditing(true)}
  return <div className="deliverables-link">
-  {url?<a className="drive-button" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open deliverables in a new tab"><DriveIcon/><span>Deliverables</span><ExternalLink size={13}/></a>:<button type="button" className="drive-button" onClick={edit} disabled={busy} aria-label="Set deliverables link"><DriveIcon/><span>Add Drive link</span></button>}
+  {url?<a className="drive-button" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open deliverables in a new tab"><DriveIcon/><ExternalLink size={13}/></a>:<button type="button" className="drive-button" onClick={edit} disabled={busy} aria-label="Set deliverables link"><DriveIcon/><span>Add Drive link</span></button>}
   {url&&<button type="button" className="drive-edit" onClick={edit} disabled={busy}><Pencil size={12}/> Edit link</button>}
   {editing&&<form className="drive-link-editor" onSubmit={async e=>{
    e.preventDefault();const trimmed=draft.trim();
