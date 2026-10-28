@@ -209,3 +209,12 @@ input,select{max-width:100%}
 .notes-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
 .notes-actions>span{font-size:12px;color:#a89da5}
 @media(max-width:900px){.project-heading .project-identity{flex-basis:100%}.project-notes{flex-basis:100%;max-width:none}.project-notes textarea{font-size:16px}}
+.notes-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.notes-edit{background:none;border:0;color:#b6a7ae;font:inherit;font-size:12px;padding:0 0 8px;cursor:pointer}
+.notes-edit:hover{color:#f6808b}
+.notes-display{width:100%;min-height:96px;max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #363039;border-radius:10px;background:#18151b;color:#eee8ed;padding:12px 14px;font-size:14px;line-height:1.5;box-sizing:border-box;cursor:text}
+.notes-display:focus-visible{outline:2px solid #ef4b5c;outline-offset:2px}
+.notes-display a{color:#f6808b;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.notes-display a:hover{color:#ffb0b8}
+.notes-placeholder{color:#928892}
+@media(max-width:900px){.notes-display{font-size:16px}.notes-edit{min-height:44px}}
