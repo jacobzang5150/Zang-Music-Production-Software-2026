@@ -43,7 +43,7 @@ Deno.serve(async(req:Request)=>{
       if(revision!>0&&claims.action!=='import'){q.set('id','eq.'+p.id);q.set('revision','eq.'+revision);const existing=await getRows(table,q);if(!existing.length)return reply({error:'This record changed in another tab. Reload before editing.'},409);previous=existing[0].data;}
       if(resource==='projects'){
         const project=p as Project;const client=await ensureClient(project.client,project.clientId);if(!client)return reply({error:'Client not found. Select a saved client or create a new one.'},400);
-        p=applyDeliveryTransition(previous,{...project,notes:project.notes??previous?.notes,clientId:client.id,client:client.name});
+        p=applyDeliveryTransition(previous,{...project,notes:project.notes??previous?.notes,deliverablesUrl:project.deliverablesUrl??previous?.deliverablesUrl,clientId:client.id,client:client.name});
       }else await ensureClient(p.name);
       if(revision===0||claims.action==='import'){
         if(claims.action==='import'){if(revision!<1)return reply({error:'Invalid revision'},400);q.set('on_conflict','owner,id');}

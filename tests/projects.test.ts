@@ -186,3 +186,10 @@ test('optional notes survive project validation and delivery updates',async()=>{
  assert.equal(ProjectSchema.parse(p).notes,undefined);
  assert(!ProjectSchema.safeParse({...p,notes:'x'.repeat(10001)}).success);
 });
+
+test('deliverables links support web URLs and removal, rejecting unsafe schemes',()=>{
+ for(const deliverablesUrl of [undefined,'','https://drive.google.com/drive/folders/abc?usp=sharing','https://example.com/mixes','http://example.com']){
+  const parsed=ProjectSchema.parse({...p,deliverablesUrl});assert.equal(parsed.deliverablesUrl,deliverablesUrl);
+ }
+ for(const deliverablesUrl of ['javascript:alert(1)','data:text/html,test','file:///tmp/test','not a link','https://user:password@example.com'])assert(!ProjectSchema.safeParse({...p,deliverablesUrl}).success);
+});

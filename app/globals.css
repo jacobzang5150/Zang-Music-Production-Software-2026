@@ -218,3 +218,15 @@ input,select{max-width:100%}
 .notes-display a:hover{color:#ffb0b8}
 .notes-placeholder{color:#928892}
 @media(max-width:900px){.notes-display{font-size:16px}.notes-edit{min-height:44px}}
+.deliverables-link{position:relative;flex:0 0 112px;align-self:center;text-align:center}
+.drive-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:112px;min-height:112px;padding:14px 10px;border:1px solid #63303d;border-radius:16px;background:linear-gradient(145deg,#321c26,#1b161e);color:#f4dce1;text-decoration:none;font:inherit;font-size:12px;cursor:pointer;box-sizing:border-box;transition:background .15s,border-color .15s}
+.drive-button:hover{background:#3e202c;border-color:#e64b60}
+.drive-button:focus-visible,.drive-edit:focus-visible{outline:2px solid #ef4b5c;outline-offset:3px}
+.drive-edit{display:inline-flex;align-items:center;gap:5px;border:0;background:none;color:#b6a7ae;font:inherit;font-size:12px;padding:10px 4px;cursor:pointer}
+.drive-link-editor{position:absolute;left:0;top:100%;z-index:20;width:min(330px,calc(100vw - 64px));padding:18px;border:1px solid #63303d;border-radius:14px;background:#211922;box-shadow:0 12px 36px #0008;text-align:left;box-sizing:border-box}
+.drive-link-editor label{font-size:13px;display:block;margin-bottom:8px}
+.drive-link-editor input{width:100%;box-sizing:border-box}
+.drive-link-editor p{font-size:12px;line-height:1.5;color:#b6a7ae;margin:10px 0}
+.drive-link-editor>div{display:flex;justify-content:flex-end;gap:8px}
+.drive-link-editor button{font-size:12px;padding:9px 12px}
+@media(max-width:900px){.deliverables-link{align-self:flex-start}.drive-link-editor input{font-size:16px}.drive-edit{min-height:44px}}
