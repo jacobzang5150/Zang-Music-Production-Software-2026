@@ -175,3 +175,14 @@ test('Completed contains only delivered and paid work ordered by most recent com
  assert(!matchesProjectFilter({...newer,deliveredAt:null},'Completed'));
  assert(compareCompletedProjects({...older,deliveredAt:'2026-10-26T12:00:00.000Z'},newer)<0);
 });
+
+test('optional notes survive project validation and delivery updates',async()=>{
+ const {applyDeliveryTransition}=await import('../lib/projects.ts');
+ const notes='Use the Telecaster.\nClient requested a softer ending.';
+ const parsed=ProjectSchema.parse({...p,notes});
+ assert.equal(parsed.notes,notes);
+ assert.equal(applyDeliveryTransition(p,parsed).notes,notes);
+ assert.equal(ProjectSchema.parse({...p,notes:''}).notes,'');
+ assert.equal(ProjectSchema.parse(p).notes,undefined);
+ assert(!ProjectSchema.safeParse({...p,notes:'x'.repeat(10001)}).success);
+});
