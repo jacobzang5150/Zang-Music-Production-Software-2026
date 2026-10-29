@@ -1,4 +1,5 @@
 import {verifyGatewayRequest} from '../../../lib/gateway-auth.ts';
+import {DriveAuthSchema} from '../../../lib/drive-auth-schema.ts';
 import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
 import {LeadSchema} from '../../../lib/leads.ts';
 import {ClientSchema} from '../../../lib/clients.ts';
@@ -17,7 +18,7 @@ Deno.serve(async(req:Request)=>{
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
     const root=Deno.env.get('SUPABASE_URL')+'/rest/v1/';
     const resource=claims.resource||'projects';
-    const table=resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
+    const table=resource==='driveAuth'?'studio_drive_auth':resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
     const base=()=>new URLSearchParams({owner:'eq.'+claims.owner});
     async function getRows(tableName:string,query:URLSearchParams){const r=await fetch(root+tableName+'?'+query,{headers});if(!r.ok)throw new Error('Database read failed');return await r.json();}
     async function ensureClient(name:string,clientId?:string){
@@ -31,6 +32,23 @@ Deno.serve(async(req:Request)=>{
       const records=[];
       for(let offset=0;;offset+=500){const q=base();q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
       return reply(records);
+    }
+    if(resource==='driveAuth'){
+      const q=base();q.set('id','eq.connection');
+      if(claims.action==='delete'){
+        const r=await fetch(root+table+'?'+q,{method:'DELETE',headers});if(!r.ok)throw new Error('Disconnect failed');return reply({ok:true});
+      }
+      if(claims.action!=='save')return reply({error:'Invalid connection operation'},400);
+      const parsed=DriveAuthSchema.safeParse(claims.project),revision=claims.revision;
+      if(!parsed.success||!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid connection'},400);
+      const data=parsed.data;
+      if(revision===0){
+        const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:'connection',data,revision:1})});
+        return r.ok?reply({ok:true}):reply({error:'Connection changed. Please reconnect.'},r.status===409?409:502);
+      }
+      q.set('revision','eq.'+revision);
+      const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data,revision:revision!+1})});if(!r.ok)throw new Error('Connection save failed');
+      return (await r.json()).length?reply({ok:true}):reply({error:'Connection changed. Please reconnect.'},409);
     }
     if(resource==='folders'){
       if(claims.action==='save'){

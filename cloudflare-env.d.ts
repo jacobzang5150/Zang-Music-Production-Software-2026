@@ -1,6 +1,8 @@
 declare namespace Cloudflare {
   interface Env {
     GOOGLE_DRIVE_CLIENT_ID?: string;
+    GOOGLE_DRIVE_CLIENT_SECRET?: string;
+    GOOGLE_DRIVE_TOKEN_KEY?: string;
     GOOGLE_PICKER_API_KEY?: string;
     GOOGLE_DRIVE_APP_ID?: string;
     DB?: D1Database;

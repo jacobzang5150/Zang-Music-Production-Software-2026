@@ -5,5 +5,5 @@ export async function GET(){
  const {GOOGLE_DRIVE_CLIENT_ID:clientId,GOOGLE_PICKER_API_KEY:apiKey,GOOGLE_DRIVE_APP_ID:appId}=env;
  if(!clientId||!apiKey||!appId)return Response.json({error:'Google Drive is not configured yet.'},{status:503});
  // These are public browser identifiers, not an OAuth client secret or access token.
- return Response.json({clientId,apiKey,appId},{headers:{'Cache-Control':'private, no-store'}});
+ return Response.json({clientId,apiKey,appId,rememberConnection:!!env.GOOGLE_DRIVE_CLIENT_SECRET&&!!env.GOOGLE_DRIVE_TOKEN_KEY},{headers:{'Cache-Control':'private, no-store'}});
 }

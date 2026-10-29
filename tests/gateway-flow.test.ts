@@ -9,7 +9,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
  const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
  const privateKey=await crypto.subtle.exportKey('jwk',pair.privateKey),publicKey=await crypto.subtle.exportKey('jwk',pair.publicKey);
  let handler:(r:Request)=>Promise<Response>;const g=globalThis as any,oldDeno=g.Deno,oldFetch=globalThis.fetch;
- const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[]};
+ const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[],studio_drive_auth:[]};
  g.__gatewayTestKey=publicKey;g.Deno={env:{get:(k:string)=>({SUPABASE_URL:'https://test.invalid',SUPABASE_SECRET_KEYS:'{"default":"sb_secret_test"}'} as Record<string,string>)[k]},serve:(h:typeof handler)=>{handler=h}};
  globalThis.fetch=async(input:any,options:any={})=>{
   const url=new URL(String(input)),table=url.pathname.split('/').at(-1)!;let rows=tables[table];assert(rows,table);
@@ -25,7 +25,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   let source=await readFile(new URL('supabase/functions/studio-data/index.ts',root),'utf8');
   source=source.replace("import publicKey from './public-key.json' with {type:'json'};",'const publicKey=globalThis.__gatewayTestKey;').replaceAll("'../../../lib/","'../lib/");
   await mkdir(new URL('.sites-runtime/',root),{recursive:true});await writeFile(file,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);await import(file.href);
-  async function call(resource:'projects'|'clients'|'folders',action:'list'|'save'|'import',extra:Record<string,unknown>={},owner='owner-a'){
+  async function call(resource:'projects'|'clients'|'folders'|'driveAuth',action:'list'|'save'|'import'|'delete',extra:Record<string,unknown>={},owner='owner-a'){
    const token=await signGatewayRequest(privateKey,{owner,resource,action,...extra});const response=await handler(new Request('https://edge.invalid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}));return {status:response.status,data:await response.json() as any};
   }
   let r=await call('clients','save',{project:{id:'ignored',name:'Artist'},revision:0});assert.equal(r.status,200);const client=r.data;
@@ -48,5 +48,13 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   r=await call('folders','import',{project:{projectId:project.id,reservationId:reservation.id,expectedUrl:''}});assert.equal(r.status,200);assert.equal(r.data.deliverablesUrl,'https://drive.google.com/drive/folders/folder-one');assert.equal(r.data.paymentReceivedAt,beforeLink.data.paymentReceivedAt);assert.equal(r.data.revision,beforeLink.revision+1);
   const second={...reservation,id:'b'.repeat(64),folderId:'folder-two'};await call('folders','save',{project:second});
   r=await call('folders','import',{project:{projectId:project.id,reservationId:second.id,expectedUrl:''}});assert.equal(r.status,409);assert.equal(tables.studio_projects[0].data.deliverablesUrl,'https://drive.google.com/drive/folders/folder-one');
+
+  const storedAuth={id:'connection',sealed:'v1.YWJjZGVmZ2hpamts.YWJjZGVmZ2hpamtsbW5vcHFyc3Q='};
+  r=await call('driveAuth','save',{project:storedAuth,revision:0});assert.equal(r.status,200);
+  r=await call('driveAuth','list',{},'owner-b');assert.deepEqual(r.data,[]);
+  r=await call('driveAuth','save',{project:storedAuth,revision:0});assert.equal(r.status,409);
+  r=await call('driveAuth','save',{project:storedAuth,revision:1});assert.equal(r.status,200);
+  r=await call('driveAuth','delete',{},'owner-b');assert.equal(r.status,200);assert.equal(tables.studio_drive_auth.length,1);
+  r=await call('driveAuth','delete');assert.equal(r.status,200);assert.equal(tables.studio_drive_auth.length,0);
  }finally{globalThis.fetch=oldFetch;g.Deno=oldDeno;delete g.__gatewayTestKey;await unlink(file).catch(()=>{})}
 });
