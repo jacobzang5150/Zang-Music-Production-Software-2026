@@ -62,7 +62,18 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
    let root=await client.get(parsed.id,controller.signal);
    if(root.shortcutDetails)root=await client.get(root.shortcutDetails.targetId,controller.signal);
    if(seq!==request.current||!alive.current)return;
-   if(root.mimeType===DRIVE_FOLDER){setTrail([root]);const result=await client.list(root.id,undefined,controller.signal);if(seq!==request.current||!alive.current)return;setFiles(result.files);setNextPage(result.nextPageToken)}else setFiles([root]);
+   if(root.mimeType===DRIVE_FOLDER){
+    setTrail([root]);
+    // Start in the saved project folder; its real parent is navigation only.
+    // A missing/inaccessible parent must not block access to the project itself.
+    const [result,parent]=await Promise.all([
+     client.list(root.id,undefined,controller.signal),
+     root.parents?.[0]?client.get(root.parents[0],controller.signal).catch(()=>null):Promise.resolve(null)
+    ]);
+    if(seq!==request.current||!alive.current)return;
+    if(parent&&parent.mimeType===DRIVE_FOLDER&&!parent.trashed&&parent.id!==root.id)setTrail([parent,root]);
+    setFiles(result.files);setNextPage(result.nextPageToken)
+   }else setFiles([root]);
    setNotice('');
   }catch(e){failure(e)}finally{if(seq===request.current&&alive.current)setLoading(false)}})();
   return()=>controller.abort();
