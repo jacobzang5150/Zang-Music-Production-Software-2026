@@ -34,7 +34,7 @@ export function useDriveFolders(projects:SavedProject[],paused:boolean,onSaved:(
       if(needsDriveLinkSharing(saved)){
        await new DriveApi(token).shareFolderByLink(saved.deliverablesUrl!);
        if(!alive.current||currentDriveToken()!==token||state.current.paused)break;
-       const response=await fetch('/api/projects',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...saved,driveSharingProcessedUrl:saved.deliverablesUrl})});
+       const response=await fetch('/api/projects',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:saved.id,url:saved.deliverablesUrl})});
        const result=await response.json() as SavedProject&{error?:string};if(!response.ok)throw new Error(result.error||'Could not save the link-sharing status.');saved=result;
       }
       completed.current.add(before);completed.current.add(signature(saved));state.current.onSaved(saved);

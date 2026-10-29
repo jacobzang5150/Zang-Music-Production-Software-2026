@@ -11,7 +11,7 @@ export function parseDriveLink(value:string):{id:string;resourceKey?:string}|nul
 }
 export function driveFileUrl(file:DriveFile){
  // Construct a trusted destination rather than opening arbitrary provider text.
- return `https://drive.google.com/${file.mimeType===DRIVE_FOLDER?'drive/folders/':'file/d/'}${encodeURIComponent(file.id)}${file.mimeType===DRIVE_FOLDER?'':'/view'}`;
+ return `https://drive.google.com/${file.mimeType===DRIVE_FOLDER?'drive/folders/':'file/d/'}${encodeURIComponent(file.id)}${file.mimeType===DRIVE_FOLDER?'':'/view'}${file.resourceKey?'?resourcekey='+encodeURIComponent(file.resourceKey):''}`;
 }
 export function readableSize(value?:string){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(1)+' GB'}
 export function isAudio(file:DriveFile){return file.mimeType.startsWith('audio/')||/\.(wav|mp3|m4a|aac|ogg|flac|aif|aiff)$/i.test(file.name)}
