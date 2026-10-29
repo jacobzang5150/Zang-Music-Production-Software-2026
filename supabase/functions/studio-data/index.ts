@@ -1,4 +1,5 @@
 import {verifyGatewayRequest} from '../../../lib/gateway-auth.ts';
+import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
 import {LeadSchema} from '../../../lib/leads.ts';
 import {ClientSchema} from '../../../lib/clients.ts';
 import {ProjectSchema,applyDeliveryTransition,type Project} from '../../../lib/projects.ts';
@@ -16,7 +17,7 @@ Deno.serve(async(req:Request)=>{
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
     const root=Deno.env.get('SUPABASE_URL')+'/rest/v1/';
     const resource=claims.resource||'projects';
-    const table=resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
+    const table=resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
     const base=()=>new URLSearchParams({owner:'eq.'+claims.owner});
     async function getRows(tableName:string,query:URLSearchParams){const r=await fetch(root+tableName+'?'+query,{headers});if(!r.ok)throw new Error('Database read failed');return await r.json();}
     async function ensureClient(name:string,clientId?:string){
@@ -30,6 +31,36 @@ Deno.serve(async(req:Request)=>{
       const records=[];
       for(let offset=0;;offset+=500){const q=base();q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
       return reply(records);
+    }
+    if(resource==='folders'){
+      if(claims.action==='save'){
+        const parsed=DriveFolderSchema.safeParse(claims.project);if(!parsed.success)return reply({error:'Invalid folder assignment'},400);
+        const p=parsed.data,q=base();q.set('on_conflict','owner,id');
+        const r=await fetch(root+table+'?'+q,{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify({owner:claims.owner,id:p.id,data:p,revision:1})});
+        if(!r.ok)throw new Error('Folder reservation failed');
+        const find=base();find.set('id','eq.'+p.id);const rows=await getRows(table,find);
+        return reply(rows[0].data);
+      }
+      if(claims.action==='import'){
+        const parsed=DriveLinkSchema.safeParse(claims.project);if(!parsed.success)return reply({error:'Invalid project link'},400);
+        const input=parsed.data,find=base();find.set('id','eq.'+input.reservationId);const folders=await getRows(table,find);
+        if(!folders.length)return reply({error:'Folder assignment not found'},404);
+        const url='https://drive.google.com/drive/folders/'+encodeURIComponent(folders[0].data.folderId);
+        // A narrow compare-and-swap preserves notes, progress and edits from other tabs.
+        for(let attempt=0;attempt<4;attempt++){
+          const q=base();q.set('id','eq.'+input.projectId);const rows=await getRows('studio_projects',q);
+          if(!rows.length)return reply({error:'Project no longer exists'},404);
+          const row=rows[0];
+          if(row.data.deliverablesUrl===url)return reply({...row.data,revision:row.revision});
+          if((row.data.deliverablesUrl||'')!==input.expectedUrl)return reply({error:'The Drive link changed while folders were being prepared. Retry to use the latest project.'},409);
+          q.set('revision','eq.'+row.revision);
+          const data={...row.data,deliverablesUrl:url};
+          const r=await fetch(root+'studio_projects?'+q,{method:'PATCH',headers,body:JSON.stringify({data,revision:row.revision+1})});
+          if(!r.ok)throw new Error('Project link save failed');if((await r.json()).length)return reply({...data,revision:row.revision+1});
+        }
+        return reply({error:'Project changed. Retry folder setup.'},409);
+      }
+      return reply({error:'Invalid folder operation'},400);
     }
     if(resource==='clients'){
       if(claims.action!=='save'||claims.revision!==0)return reply({error:'Only new-client creation is supported'},400);

@@ -1,5 +1,5 @@
 export const DRIVE_FOLDER='application/vnd.google-apps.folder';
-export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canDownload?:boolean;canAddChildren?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
+export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;trashed?:boolean;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canDownload?:boolean;canAddChildren?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
 export function parseDriveLink(value:string):{id:string;resourceKey?:string}|null{
  try{
   const u=new URL(value);
@@ -16,7 +16,7 @@ export function driveFileUrl(file:DriveFile){
 export function readableSize(value?:string){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(1)+' GB'}
 export function isAudio(file:DriveFile){return file.mimeType.startsWith('audio/')||/\.(wav|mp3|m4a|aac|ogg|flac|aif|aiff)$/i.test(file.name)}
 export function isText(file:DriveFile){return file.mimeType==='text/plain'||/\.(txt|md|csv|json)$/i.test(file.name)&&!file.mimeType.startsWith('application/vnd.google-apps.')}
-export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren),shortcutDetails';
+export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,trashed,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren),shortcutDetails';
 export class DriveError extends Error{status:number;constructor(message:string,status=0){super(message);this.status=status}}
 export async function checkDriveResponse(response:Response){
  if(response.ok||response.status===308)return response;

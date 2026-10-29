@@ -16,7 +16,7 @@ let identityPromise:Promise<void>|null=null;
 let pickerPromise:Promise<void>|null=null;
 let session:{token:string;expiresAt:number}|null=null;
 export function currentDriveToken(){if(!session||Date.now()>=session.expiresAt){session=null;return null}return session.token}
-export function forgetDriveToken(){session=null}
+export function forgetDriveToken(){session=null;window.dispatchEvent(new Event('session-drive-auth'))}
 function loadScript(src:string){return new Promise<void>((resolve,reject)=>{const script=document.createElement('script');script.src=src;script.async=true;const timer=setTimeout(()=>{script.remove();reject(new Error('Google took too long to load. Check your connection and retry.'))},20000);script.onload=()=>{clearTimeout(timer);resolve()};script.onerror=()=>{clearTimeout(timer);script.remove();reject(new Error('Could not load Google. Check your connection or browser content blocker.'))};document.head.appendChild(script)})}
 export async function prepareDrive(){
  if(!configPromise)configPromise=fetch('/api/drive/config',{cache:'no-store'}).then(async r=>{const data=await r.json() as DriveConfig&{error?:string};if(!r.ok)throw new Error(data.error||'Drive is unavailable');return data as DriveConfig}).catch(e=>{configPromise=null;throw e});
@@ -30,7 +30,7 @@ export function connectDrive(config:DriveConfig):Promise<string>{
   const client=window.google.accounts.oauth2.initTokenClient({client_id:config.clientId,scope:DRIVE_SCOPE,include_granted_scopes:false,callback:r=>{
    if(r.error||!r.access_token)return reject(new Error(r.error_description||r.error||'Google authorization was not completed.'));
    if(!r.scope?.split(' ').includes(DRIVE_SCOPE))return reject(new Error('Drive access was not granted. Reconnect and allow access to manage your files.'));
-   session={token:r.access_token,expiresAt:Date.now()+Math.max(0,(r.expires_in||3600)-60)*1000};resolve(r.access_token);
+   session={token:r.access_token,expiresAt:Date.now()+Math.max(0,(r.expires_in||3600)-60)*1000};window.dispatchEvent(new Event('session-drive-auth'));resolve(r.access_token);
   },error_callback:e=>reject(new Error(e.type==='popup_closed'?'Google sign-in was closed.':e.type==='popup_failed_to_open'?'Allow popups for Session, then try Connect Google Drive again.':'Google sign-in could not open.'))});
   client.requestAccessToken({prompt:'select_account'});
  });
