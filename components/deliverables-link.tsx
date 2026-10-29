@@ -1,14 +1,17 @@
 'use client';
 import {useState} from 'react';
+import DriveWindow from '@/components/drive-window';
 import {Pencil} from 'lucide-react';
 import {deliverablesUrlSchema} from '@/lib/projects';
 
 function DriveIcon(){return <svg viewBox="0 0 48 42" width="40" height="36" aria-hidden="true"><path fill="#f6808b" d="M16 1h16l16 28H32z"/><path fill="#bc3045" d="M16 1 0 29l8 12L24 13z"/><path fill="#e64b60" d="M16 27h32l-8 14H8z"/></svg>}
 export default function DeliverablesLink({url,busy,onSave}:{url:string;busy:boolean;onSave:(url:string)=>Promise<boolean>}){
+ const [open,setOpen]=useState(false);
  const [editing,setEditing]=useState(false),[draft,setDraft]=useState(url),[error,setError]=useState('');
  function edit(){setDraft(url);setError('');setEditing(true)}
  return <div className="deliverables-link">
-  {url?<a className="drive-button" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open deliverables in a new tab"><DriveIcon/></a>:<button type="button" className="drive-button" onClick={edit} disabled={busy} aria-label="Set deliverables link"><DriveIcon/><span>Add Drive link</span></button>}
+  {open&&<DriveWindow url={url} onClose={()=>setOpen(false)} onLinkChange={onSave}/>}
+  {url?<button type="button" className="drive-button" onClick={()=>setOpen(true)} aria-label="Open Google Drive"><DriveIcon/></button>:<button type="button" className="drive-button" onClick={edit} disabled={busy} aria-label="Set deliverables link"><DriveIcon/><span>Add Drive link</span></button>}
   {url&&<button type="button" className="drive-edit" onClick={edit} disabled={busy}><Pencil size={12}/> Edit link</button>}
   {editing&&<form className="drive-link-editor" onSubmit={async e=>{
    e.preventDefault();const trimmed=draft.trim();

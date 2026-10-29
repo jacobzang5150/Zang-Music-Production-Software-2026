@@ -76,3 +76,20 @@ The source repository is public. Client/project records and credentials are neve
 Leads schema: `supabase/leads-schema.sql` (`public.studio_leads`). The signed gateway resource is `leads`; omitted resource continues to use projects.
 
 Client directory schema: `supabase/clients-schema.sql`; repeat-safe data import: `supabase/backfill-clients.sql`. Client records are retained independently of project deletion. Delivery fields are stored in each project JSON document; server transition logic preserves timestamps across ordinary edits.
+
+## Google Drive window
+
+The project Drive icon opens an accessible modal above Session; clicking outside or pressing Escape closes it. Projects retain their folder/file URL in Supabase. The modal supports folder browsing, filtering, pagination, Google Picker folder selection, direct resumable uploads (8 MiB chunks), upload cancellation, inline audio playback, renaming, replacing binary file contents, and editing small plain-text files. Google Docs/Sheets and other native Google formats use Google’s own editors via Open in Google. This is a custom Drive client, not an embedding of the full Drive website.
+
+Configure these runtime values in Sites, never the public repository:
+- `GOOGLE_DRIVE_CLIENT_ID`: OAuth web client ID.
+- `GOOGLE_PICKER_API_KEY`: browser API key restricted to the production site and `https://docs.google.com/*`, and to Google Drive/Picker APIs.
+- `GOOGLE_DRIVE_APP_ID`: Google Cloud project number.
+
+Enable Google Drive API and Google Picker API. Register the exact production origin in the OAuth client's authorized JavaScript origins. This integration uses Google's browser token flow, so it needs no client secret or redirect URI. Declare `https://www.googleapis.com/auth/drive` under Google Auth platform > Data Access when configuring an external consent screen, and authorize the account as a test user while in Testing. Full Drive scope is necessary to list/manage existing files in linked folders: `drive.file` alone does not grant recursive access to all existing folder contents. Public external use of this restricted scope may require Google's verification; internal Workspace and personal testing requirements differ.
+
+The visitor explicitly connects Google Drive. Tokens stay in memory only and are never sent to Session's server, Supabase, GitHub, or external URLs. Expired tokens require another user click to reconnect; the disconnect control forgets the local token. Drive API requests and file transfers go directly from the browser to Google. The authenticated `/api/drive/config` endpoint returns the public browser identifiers with no-store caching; the browser-restricted API key is necessarily visible to the signed-in browser. Google and file permissions remain authoritative for each action.
+
+Inline audio buffers files up to 256 MiB; larger audio uses Google's preview/open action. Format playback depends on the browser. The plain-text editor is limited to 1 MiB and checks modified time before replacing content. It is not a collaborative document or audio waveform editor. Closing during an upload aborts unfinished transfers; refresh to verify any files completed before cancellation. No delete, sharing, or permission-changing UI is provided.
+
+Verification: unit tests cover Drive URL parsing, safe request destinations, pagination, expired authorization, resource keys, download restrictions, and interrupted resumable uploads. Local browser QA uses temporary fixtures (not published) for connection, listing, audio, rename, and dismissal. Real account consent, Google Picker permissions, and live file operations must be verified by the signed-in owner after deployment.
