@@ -1,6 +1,9 @@
-import {DriveApi,DriveError,DRIVE_FOLDER,DRIVE_FIELDS,type DriveFile} from './drive-files.ts';
+import {DriveApi,DriveError,DRIVE_FOLDER,DRIVE_FIELDS,parseDriveLink,type DriveFile} from './drive-files.ts';
 import type {FolderReservation} from './drive-folders-schema.ts';
 export const normalizeFolderName=(name:string)=>name.trim().normalize('NFKC').toLowerCase();
+// The saved link is the durable completion marker, including links created before this rule.
+export function needsDriveFolderSetup(project:{deliverablesUrl?:string}){return !project.deliverablesUrl?.trim()}
+export function needsDriveLinkSharing(project:{deliverablesUrl?:string;driveSharingProcessedUrl?:string}){return !!project.deliverablesUrl&&!!parseDriveLink(project.deliverablesUrl)&&project.driveSharingProcessedUrl!==project.deliverablesUrl}
 const quote=(value:string)=>value.replace(/['\\]/g,'\\$&');
 export async function folderKey(account:string,key:string){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([account,key])));return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')}
 export async function folderRequest<T>(method:string,body?:unknown):Promise<T>{

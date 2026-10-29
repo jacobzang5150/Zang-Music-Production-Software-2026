@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DriveApi,DRIVE_FOLDER,type DriveFile} from '../lib/drive-files.ts';
-import {DriveFolderSetup} from '../lib/drive-folders.ts';
+import {DriveFolderSetup,needsDriveFolderSetup} from '../lib/drive-folders.ts';
 import type {FolderReservation} from '../lib/drive-folders-schema.ts';
 function fixture(initial:DriveFile[]=[]){
  const files=new Map(initial.map(f=>[f.id,f]));const reservations=new Map<string,FolderReservation>();let serial=0,creates=0;let failName='';
@@ -48,4 +48,29 @@ test('partial setup resumes with the reserved IDs, without duplicate folders or 
 test('a trashed folder is reported instead of making a replacement duplicate',async()=>{
  const real=globalThis.fetch,f=fixture();globalThis.fetch=f.fetchMock;
  try{const p={id:'a',client:'Artist',name:'Album'};const result=await (await manager()).project(p);f.files.get(result.file.id)!.trashed=true;await assert.rejects((await manager()).project(p),/Drive Trash/);assert.equal(f.creates,5)}finally{globalThis.fetch=real}
+});
+
+test('saved links skip setup after reconnect even when folders have been deleted or projects renamed',async()=>{
+ const real=globalThis.fetch,f=fixture();globalThis.fetch=f.fetchMock;
+ try{
+  const p={id:'a',client:'Artist',name:'Album'};const result=await (await manager()).project(p);
+  const saved={...p,deliverablesUrl:'https://drive.google.com/drive/folders/'+result.file.id};
+  const edits=[...f.files.values()].find(file=>file.name==='EDITS')!;f.files.delete(edits.id);
+  let requests=0;globalThis.fetch=async()=>{requests++;throw new Error('Completed projects must not query Drive during reconnect')};
+  const restored=JSON.parse(JSON.stringify(saved));
+  assert.deepEqual([restored,{...restored,name:'Renamed album'}].filter(needsDriveFolderSetup),[]);
+  f.files.delete(result.file.id);assert.equal(needsDriveFolderSetup(restored),false);
+  assert.equal(needsDriveFolderSetup({...p,deliverablesUrl:''}),true);
+  assert.equal(requests,0);assert.equal(f.creates,5);assert(!f.files.has(edits.id));
+ }finally{globalThis.fetch=real}
+});
+test('sharing is a one-time migration per saved link, independent from folder creation',async()=>{
+ const {needsDriveLinkSharing}=await import('../lib/drive-folders.ts');
+ const url='https://drive.google.com/drive/folders/folder';
+ assert(needsDriveLinkSharing({deliverablesUrl:url}));
+ assert(!needsDriveFolderSetup({deliverablesUrl:url}));
+ const saved=JSON.parse(JSON.stringify({deliverablesUrl:url,driveSharingProcessedUrl:url}));
+ assert(!needsDriveLinkSharing(saved));assert(!needsDriveFolderSetup(saved));
+ assert(needsDriveLinkSharing({...saved,deliverablesUrl:url+'-changed'}));
+ assert(!needsDriveLinkSharing({deliverablesUrl:'https://example.com/folder'}));
 });

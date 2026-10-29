@@ -1,5 +1,5 @@
 export const DRIVE_FOLDER='application/vnd.google-apps.folder';
-export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;trashed?:boolean;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canDownload?:boolean;canAddChildren?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
+export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;trashed?:boolean;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canTrash?:boolean;canShare?:boolean;canDownload?:boolean;canAddChildren?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
 export function parseDriveLink(value:string):{id:string;resourceKey?:string}|null{
  try{
   const u=new URL(value);
@@ -16,7 +16,7 @@ export function driveFileUrl(file:DriveFile){
 export function readableSize(value?:string){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(1)+' GB'}
 export function isAudio(file:DriveFile){return file.mimeType.startsWith('audio/')||/\.(wav|mp3|m4a|aac|ogg|flac|aif|aiff)$/i.test(file.name)}
 export function isText(file:DriveFile){return file.mimeType==='text/plain'||/\.(txt|md|csv|json)$/i.test(file.name)&&!file.mimeType.startsWith('application/vnd.google-apps.')}
-export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,trashed,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren),shortcutDetails';
+export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,trashed,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren,canTrash,canShare),shortcutDetails';
 export class DriveError extends Error{status:number;constructor(message:string,status=0){super(message);this.status=status}}
 export async function checkDriveResponse(response:Response){
  if(response.ok||response.status===308)return response;
@@ -38,6 +38,36 @@ export class DriveApi{
   const q=new URLSearchParams({q:`'${id.replace(/['\\]/g,'\\$&')}' in parents and trashed = false`,fields:`nextPageToken,files(${DRIVE_FIELDS})`,pageSize:'100',orderBy:'folder,name',supportsAllDrives:'true',includeItemsFromAllDrives:'true'});
   if(pageToken)q.set('pageToken',pageToken);
   const result=await (await this.request('files?'+q,{signal})).json() as {files:DriveFile[];nextPageToken?:string};result.files.forEach((file:DriveFile)=>this.remember(file));return result;
+ }
+ /** Missing or trashed folders are deliberately ignored; this never creates folders. */
+ async shareFolderByLink(url:string){
+  const parsed=parseDriveLink(url);if(!parsed)throw new DriveError('This is not a Google Drive link.');if(parsed.resourceKey)this.keys.set(parsed.id,parsed.resourceKey);
+  let folder:DriveFile;
+  try{folder=await this.get(parsed.id)}catch(e){if(e instanceof DriveError&&e.status===404)return false;throw e}
+  if(folder.trashed)return false;
+  if(folder.mimeType!==DRIVE_FOLDER)throw new DriveError('Automatic link sharing applies to project folders, not individual files.');
+  let pageToken:string|undefined;
+  do{
+   const q=new URLSearchParams({supportsAllDrives:'true',pageSize:'100',fields:'nextPageToken,permissions(id,type,role,allowFileDiscovery)'});if(pageToken)q.set('pageToken',pageToken);
+   const result=await (await this.request('files/'+encodeURIComponent(folder.id)+'/permissions?'+q)).json() as {permissions:{id:string;type:string;role:string;allowFileDiscovery?:boolean}[];nextPageToken?:string};
+   // Existing public access already satisfies the request. Preserve explicit roles.
+   if(result.permissions.some(p=>p.type==='anyone'&&['reader','commenter','writer'].includes(p.role)))return true;
+   pageToken=result.nextPageToken;
+  }while(pageToken);
+  if(folder.capabilities?.canShare===false)throw new DriveError('This Google account cannot change sharing for this folder.');
+  await this.request('files/'+encodeURIComponent(folder.id)+'/permissions?supportsAllDrives=true&fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'anyone',role:'reader',allowFileDiscovery:false})});
+  return true;
+ }
+ async reserveFolderId(){const result=await (await this.request('files/generateIds?count=1&space=drive&type=files')).json() as {ids:string[]};if(!result.ids?.[0])throw new DriveError('Could not reserve a new folder. Please retry.');return result.ids[0]}
+ async createFolder(parent:DriveFile,name:string,id:string){
+  const trimmed=name.trim();if(!trimmed||trimmed.length>255)throw new DriveError('Enter a folder name between 1 and 255 characters.');
+  if(parent.mimeType!==DRIVE_FOLDER||parent.capabilities?.canAddChildren!==true)throw new DriveError('You cannot create folders here.');
+  try{return await (await this.request('files?supportsAllDrives=true&fields='+encodeURIComponent(DRIVE_FIELDS),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name:trimmed,mimeType:DRIVE_FOLDER,parents:[parent.id]})})).json() as DriveFile}
+  catch(e){if(e instanceof DriveError&&e.status===409)return this.get(id);throw e}
+ }
+ async trashFolder(file:DriveFile){
+  if(file.mimeType!==DRIVE_FOLDER||file.capabilities?.canTrash!==true)throw new DriveError('This folder cannot be moved to Trash by this account.');
+  await this.request('files/'+encodeURIComponent(file.id)+'?supportsAllDrives=true',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
  }
  async rename(id:string,name:string){return (await this.request('files/'+encodeURIComponent(id)+'?supportsAllDrives=true&fields='+encodeURIComponent(DRIVE_FIELDS),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})).json() as Promise<DriveFile>}
  async content(file:DriveFile,signal?:AbortSignal){

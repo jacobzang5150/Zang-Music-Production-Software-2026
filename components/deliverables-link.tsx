@@ -10,7 +10,7 @@ export default function DeliverablesLink({url,busy,onSave,syncMessage,syncError,
  async function copy(){try{await navigator.clipboard.writeText(url);setCopied(true);setError('');if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>setCopied(false),2200)}catch{setError('Could not copy. Allow clipboard access and try again.')}}
  return <div className="deliverables-link">
   {open&&<DriveWindow url={url} onClose={()=>setOpen(false)} onLinkChange={onSave} managed syncMessage={syncMessage} syncError={syncError} onRetry={onRetry}/>}
-  <div className="drive-button-row"><button type="button" className="drive-button" onClick={()=>setOpen(true)} aria-label="Open Google Drive"><DriveIcon/></button><button type="button" className={'drive-copy'+(copied?' copied':'')} onClick={copy} disabled={!url||busy} aria-label={copied?'Link copied':'Copy Drive link'} title={copied?'Link copied':'Copy Drive link'}>{copied?<Check size={18}/>:<Copy size={18}/>}</button></div>
+  <div className="drive-button-row"><button type="button" className={'drive-copy'+(copied?' copied':'')} onClick={copy} disabled={!url||busy} aria-label={copied?'Link copied':'Copy Drive link'} title={copied?'Link copied':'Copy Drive link'}>{copied?<Check size={18}/>:<Copy size={18}/>}</button><button type="button" className="drive-button" onClick={()=>setOpen(true)} aria-label="Open Google Drive"><DriveIcon/></button></div>
   <span className="sr-only" role="status">{copied?'Drive link copied':''}</span>{error&&<p className="drive-copy-error" role="alert">{error}</p>}
  </div>;
 }

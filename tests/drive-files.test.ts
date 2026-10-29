@@ -50,3 +50,45 @@ test('untrusted upload destinations are rejected before file data is sent',async
 test('download restrictions are honored without issuing a media request',async()=>{
  await assert.rejects(new DriveApi('test').content({id:'x',name:'Mix',mimeType:'audio/wav',capabilities:{canDownload:false}}),/disabled/);
 });
+
+test('folder removal uses recoverable Trash and refuses missing permission',async()=>{
+ const real=globalThis.fetch;let calls=0;
+ try{
+  globalThis.fetch=async(input,init)=>{calls++;const url=new URL(String(input));assert.equal(url.origin,'https://www.googleapis.com');assert.equal(url.pathname,'/drive/v3/files/folder');assert.equal(init?.method,'PATCH');assert.deepEqual(JSON.parse(String(init?.body)),{trashed:true});return Response.json({id:'folder',trashed:true})};
+  const api=new DriveApi('test'),folder={id:'folder',name:'EDITS',mimeType:DRIVE_FOLDER,capabilities:{canTrash:true}};
+  await api.trashFolder(folder);assert.equal(calls,1);
+  await assert.rejects(api.trashFolder({...folder,capabilities:{canTrash:false}}),/cannot be moved/);assert.equal(calls,1);
+ }finally{globalThis.fetch=real}
+});
+test('link sharing grants only viewer access without search discovery and leaves deleted folders alone',async()=>{
+ const real=globalThis.fetch;let mode='restricted',writes:unknown[]=[];
+ try{
+  globalThis.fetch=async(input,init)=>{
+   const u=new URL(String(input));assert.equal(u.origin,'https://www.googleapis.com');
+   if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return Response.json({id:'anyoneWithLink'})}
+   if(u.pathname.endsWith('/permissions'))return Response.json({permissions:mode==='shared'?[{id:'anyoneWithLink',type:'anyone',role:'reader',allowFileDiscovery:false}]:[]});
+   if(mode==='missing')return Response.json({error:{message:'Missing'}},{status:404});
+   return Response.json({id:'folder',name:'Album',mimeType:DRIVE_FOLDER,trashed:mode==='trashed',capabilities:{canShare:mode!=='blocked'}});
+  };
+  const api=new DriveApi('test'),url='https://drive.google.com/drive/folders/folder';
+  assert.equal(await api.shareFolderByLink(url),true);assert.deepEqual(writes,[{type:'anyone',role:'reader',allowFileDiscovery:false}]);
+  mode='shared';await api.shareFolderByLink(url);assert.equal(writes.length,1);
+  mode='missing';assert.equal(await api.shareFolderByLink(url),false);
+  mode='trashed';assert.equal(await api.shareFolderByLink(url),false);assert.equal(writes.length,1);
+  mode='blocked';await assert.rejects(api.shareFolderByLink(url),/cannot change sharing/);assert.equal(writes.length,1);
+ }finally{globalThis.fetch=real}
+});
+test('manual folder creation stays in the current folder and retries the same reserved ID',async()=>{
+ const real=globalThis.fetch;let created=false,writes=0;
+ const parent={id:'parent',name:'Album',mimeType:DRIVE_FOLDER,capabilities:{canAddChildren:true}};
+ try{
+  globalThis.fetch=async(input,init)=>{
+   const u=new URL(String(input));
+   if(u.pathname.endsWith('/generateIds'))return Response.json({ids:['reserved']});
+   if(init?.method==='POST'){writes++;assert.deepEqual(JSON.parse(String(init.body)),{id:'reserved',name:'Stems',mimeType:DRIVE_FOLDER,parents:['parent']});if(created)return Response.json({error:{message:'Already exists'}},{status:409});created=true;return Response.json({id:'reserved',name:'Stems',mimeType:DRIVE_FOLDER,parents:['parent']})}
+   assert.equal(u.pathname,'/drive/v3/files/reserved');return Response.json({id:'reserved',name:'Stems',mimeType:DRIVE_FOLDER,parents:['parent']});
+  };
+  const api=new DriveApi('test'),id=await api.reserveFolderId();assert.equal((await api.createFolder(parent,' Stems ',id)).id,id);assert.equal((await api.createFolder(parent,'Stems',id)).id,id);assert.equal(writes,2);
+  await assert.rejects(api.createFolder({...parent,capabilities:{canAddChildren:false}},'Stems',id),/cannot create/);assert.equal(writes,2);
+ }finally{globalThis.fetch=real}
+});
