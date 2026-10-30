@@ -259,3 +259,5 @@ input,select{max-width:100%}
 @media(max-width:900px){.drive-sync-status,.drive-background-status{display:none}}
 
 .focus[role="button"]{cursor:pointer}.focus[role="button"]:focus-visible{outline:3px solid #ff6270;outline-offset:3px}.focus[role="button"]:hover{border-color:#d35b72}
+
+.project-card.is-on-hold,.project-heading.is-on-hold{filter:grayscale(1)}.project-card.is-on-hold{background:#19191d;color:#a7a7ae;border-color:#34343a}.project-card.is-on-hold h2,.project-card.is-on-hold .project-name{color:#a7a7ae}.project-card.is-on-hold .meter{opacity:.55}

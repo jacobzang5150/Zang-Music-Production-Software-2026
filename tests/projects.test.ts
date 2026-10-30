@@ -193,3 +193,5 @@ test('deliverables links support web URLs and removal, rejecting unsafe schemes'
  }
  for(const deliverablesUrl of ['javascript:alert(1)','data:text/html,test','file:///tmp/test','not a link','https://user:password@example.com'])assert(!ProjectSchema.safeParse({...p,deliverablesUrl}).success);
 });
+
+test('held projects stay below every active project, including overdue high priority work',()=>{const held={...p,id:'held',onHold:true,deadline:'2020-01-01',priority:5};const active={...p,id:'active',deadline:'',priority:1};assert.deepEqual(rankProjects([held,active],now).map(p=>p.id),['active','held']);assert.equal(rankProjects([{...held,onHold:false},active],now)[0].id,'held');assert.equal(ProjectSchema.parse(held).onHold,true);assert.equal(ProjectSchema.parse(p).onHold,undefined)});
