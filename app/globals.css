@@ -263,3 +263,5 @@ input,select{max-width:100%}
 .project-card.is-on-hold,.project-heading.is-on-hold{filter:grayscale(1)}.project-card.is-on-hold{background:#19191d;color:#a7a7ae;border-color:#34343a}.project-card.is-on-hold h2,.project-card.is-on-hold .project-name{color:#a7a7ae}.project-card.is-on-hold .meter{opacity:.55}
 
 .modal-footer:has(.hold-toggle) .delete{margin-right:0}.modal-footer .hold-toggle{margin-right:auto}.hold-toggle[aria-pressed="true"]{background:#343239;border-color:#77717b}@media(max-width:430px){.modal-footer:has(.hold-toggle){flex-wrap:wrap}.modal-footer .hold-toggle{white-space:normal}}
+
+.chart-row.is-on-hold{filter:grayscale(1);border-color:#34343a}.chart-row.is-on-hold .chart-label strong,.chart-row.is-on-hold .chart-value,.chart-row.is-on-hold .chart-value svg{color:#aaaab2}.chart-row.is-on-hold .chart-label small{color:#96969e}.chart-row.is-on-hold .chart-track i{background:#72727c}.chart-row.is-on-hold:hover .chart-label strong{color:#d0d0d6}
