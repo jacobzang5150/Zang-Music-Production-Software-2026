@@ -195,3 +195,5 @@ test('deliverables links support web URLs and removal, rejecting unsafe schemes'
 });
 
 test('held projects stay below every active project, including overdue high priority work',()=>{const held={...p,id:'held',onHold:true,deadline:'2020-01-01',priority:5};const active={...p,id:'active',deadline:'',priority:1};assert.deepEqual(rankProjects([held,active],now).map(p=>p.id),['active','held']);assert.equal(rankProjects([{...held,onHold:false},active],now)[0].id,'held');assert.equal(ProjectSchema.parse(held).onHold,true);assert.equal(ProjectSchema.parse(p).onHold,undefined)});
+
+test('graphs place held projects last and restore alphabetical order when resumed',async()=>{const {projectBars}=await import('../lib/projects.ts');const held={...p,id:'held',client:'A',onHold:true};const active={...p,id:'active',client:'Z'};assert.deepEqual(projectBars([held,active]).map(p=>p.id),['active','held']);assert.deepEqual(projectBars([{...held,onHold:false},active]).map(p=>p.id),['held','active'])});

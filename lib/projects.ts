@@ -50,7 +50,7 @@ export function matchesProjectFilter(p:Project,filter:string){
  if(isSettled(p))return false;
  return filter==='Awaiting payment'?!!p.deliveredAt:true;
 }
-export function projectBars(projects:Project[]){return projects.filter(p=>!isSettled(p)).sort((a,b)=>a.client.localeCompare(b.client)||a.name.localeCompare(b.name)).map(p=>({id:p.id,name:p.name,client:p.client,type:p.type,value:progress(p)}));}
+export function projectBars(projects:Project[]){return projects.filter(p=>!isSettled(p)).sort((a,b)=>Number(!!a.onHold)-Number(!!b.onHold)||a.client.localeCompare(b.client)||a.name.localeCompare(b.name)).map(p=>({id:p.id,name:p.name,client:p.client,type:p.type,value:progress(p)}));}
 
 export function blankStages(idFactory:()=>string=()=>crypto.randomUUID()):Project['stages']{
   return Array.from({length:5},()=>({id:idFactory(),name:'',weight:20}));
