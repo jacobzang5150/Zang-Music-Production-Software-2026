@@ -26,7 +26,7 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
  function clearMedia(){mediaController.current?.abort();if(objectUrl.current){URL.revokeObjectURL(objectUrl.current);objectUrl.current=null}setMedia(null);setTextDraft('');setReplacement(null)}
  function close(){if(dirtyRef.current&&!confirm('Discard unsaved file edits?'))return;closeRef.current()}
  useEffect(()=>{
-  alive.current=true;const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;
+  alive.current=true;window.dispatchEvent(new Event('session-drive-files-changed'));const previous=document.activeElement as HTMLElement|null,overflow=document.body.style.overflow;
   document.body.style.overflow='hidden';closeButton.current?.focus();
   const key=(e:KeyboardEvent)=>{
    if(pickerRef.current)return;

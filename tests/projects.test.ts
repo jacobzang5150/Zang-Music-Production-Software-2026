@@ -197,3 +197,21 @@ test('deliverables links support web URLs and removal, rejecting unsafe schemes'
 test('held projects stay below every active project, including overdue high priority work',()=>{const held={...p,id:'held',onHold:true,deadline:'2020-01-01',priority:5};const active={...p,id:'active',deadline:'',priority:1};assert.deepEqual(rankProjects([held,active],now).map(p=>p.id),['active','held']);assert.equal(rankProjects([{...held,onHold:false},active],now)[0].id,'held');assert.equal(ProjectSchema.parse(held).onHold,true);assert.equal(ProjectSchema.parse(p).onHold,undefined)});
 
 test('graphs place held projects last and restore alphabetical order when resumed',async()=>{const {projectBars}=await import('../lib/projects.ts');const held={...p,id:'held',client:'A',onHold:true};const active={...p,id:'active',client:'Z'};assert.deepEqual(projectBars([held,active]).map(p=>p.id),['active','held']);assert.deepEqual(projectBars([{...held,onHold:false},active]).map(p=>p.id),['held','active'])});
+
+test('Drive rename merge preserves progress and rejects concurrent project renames',async()=>{
+ const {mergeDriveName,driveNamePendingAfterSave}=await import('../lib/projects.ts');
+ const before={...p,driveNameSynced:p.name};
+ const renamed={...before,name:'New title'};
+ assert.equal(driveNamePendingAfterSave(before,renamed),true);
+ const pending={...renamed,driveNamePending:true};
+ const saved=mergeDriveName(pending,{expectedName:'New title',expectedPending:true,name:'New title'})!;
+ assert.equal(saved.driveNamePending,false);
+ assert.equal(driveNamePendingAfterSave(pending,saved),false);
+ assert.equal(mergeDriveName(pending,{expectedName:p.name,expectedPending:false,name:'Stale title'}),null);
+ const pulled=mergeDriveName(before,{expectedName:p.name,expectedPending:false,name:'Drive title'})!;
+ assert.deepEqual(pulled.songs,before.songs);
+ assert.equal(driveNamePendingAfterSave(before,pulled),false);
+ assert.equal(pulled.name,'Drive title');
+ const single={...before,type:'Single' as const,songs:[{...p.songs[0],name:p.name}]};
+ assert.equal(mergeDriveName(single,{expectedName:p.name,expectedPending:false,name:'New single'})!.songs[0].name,'New single');
+});

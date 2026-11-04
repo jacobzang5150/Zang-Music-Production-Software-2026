@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {getChatGPTUser} from '../../chatgpt-auth';
-import {ProjectSchema} from '@/lib/projects';
+import {ProjectSchema,mergeDriveName} from '@/lib/projects';
 import {callStudioDatabase} from '@/lib/supabase';
 async function respond(input:Parameters<typeof callStudioDatabase>[0]){
   try{const response=await callStudioDatabase(input);return new Response(response.body,{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch{return Response.json({error:'Could not connect to project storage. Please try again.'},{status:503})}
@@ -9,15 +9,19 @@ export async function GET(){const user=await getChatGPTUser();if(!user)return Re
 // Background metadata must merge against the latest record, never a stale UI snapshot.
 export async function PATCH(req:Request){
  const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to save projects.'},{status:401});
- const input=z.object({id:z.string().min(1).max(80),url:z.string().url()}).safeParse(await req.json().catch(()=>null));
+ const input=z.object({id:z.string().min(1).max(80),url:z.string().url(),nameSync:z.object({expectedName:z.string(),expectedPending:z.boolean(),name:z.string().trim().min(1).max(160)}).optional()}).safeParse(await req.json().catch(()=>null));
  if(!input.success)return Response.json({error:'Invalid sharing status.'},{status:400});
  try{
   for(let attempt=0;attempt<5;attempt++){
    const listed=await callStudioDatabase({owner:user.userId,action:'list'});if(!listed.ok)return new Response(listed.body,{status:listed.status});
    const records=await listed.json() as (z.infer<typeof ProjectSchema>&{revision:number})[];
    const latest=records.find(p=>p.id===input.data.id);if(!latest)return Response.json({error:'Project no longer exists.'},{status:404});
-   if(latest.deliverablesUrl!==input.data.url||latest.driveSharingProcessedUrl===input.data.url)return Response.json(latest);
-   const saved=await callStudioDatabase({owner:user.userId,action:'save',revision:latest.revision,project:{...latest,driveSharingProcessedUrl:input.data.url}});
+   if(latest.deliverablesUrl!==input.data.url)return Response.json(latest);
+   const sync=input.data.nameSync;
+   if(!sync&&latest.driveSharingProcessedUrl===input.data.url)return Response.json(latest);
+   const project=sync?mergeDriveName(latest,sync):{...latest,driveSharingProcessedUrl:input.data.url};
+   if(!project)return Response.json(latest);
+   const saved=await callStudioDatabase({owner:user.userId,action:'save',revision:latest.revision,project});
    if(saved.status===409){await saved.body?.cancel();continue;}
    return new Response(saved.body,{status:saved.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   }
