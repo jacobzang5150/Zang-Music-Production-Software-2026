@@ -45,9 +45,9 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
  },[]);
  useEffect(()=>{
   const renamed=(event:Event)=>{
-   const change=(event as CustomEvent<{id:string;name:string}>).detail;if(!change)return;
+   const change=(event as CustomEvent<{id:string;name:string;parent?:DriveFile}>).detail;if(!change)return;
    const update=(file:DriveFile)=>file.id===change.id?{...file,name:change.name}:file;
-   setFiles(files=>files.map(update));setTrail(path=>path.map(update));setMedia(value=>value?{...value,file:update(value.file)}:value);
+   setFiles(files=>files.map(update));setTrail(path=>{const updated=path.map(update);const index=updated.findIndex(file=>file.id===change.id);return change.parent&&index>=0?[change.parent,...updated.slice(index)]:updated});setMedia(value=>value?{...value,file:update(value.file)}:value);
   };
   window.addEventListener('session-drive-name-synced',renamed);
   return()=>window.removeEventListener('session-drive-name-synced',renamed);

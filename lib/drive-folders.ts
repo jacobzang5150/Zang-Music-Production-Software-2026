@@ -57,6 +57,25 @@ export class DriveFolderSetup{
   }
   return {file,reservation};
  }
+ async moveProjectToClient(folderId:string,clientName:string){
+  // Read the linked folder first: deleted projects never trigger creation.
+  const project=await this.api.get(folderId);
+  if(project.trashed)return null;
+  if(project.mimeType!==DRIVE_FOLDER)throw new Error('The project link must point to a folder.');
+  const parentId=project.parents?.[0];
+  if(parentId){
+   const parent=await this.api.get(parentId);
+   if(!parent.trashed&&normalizeFolderName(parent.name)===normalizeFolderName(clientName))return {project,parent};
+  }
+  const {file:parent}=await this.ensure('client:'+normalizeFolderName(clientName),clientName.trim(),this.root,true);
+  if(parent.id===project.id)throw new Error('The client folder cannot be the project folder itself.');
+  if(normalizeFolderName(parent.name)!==normalizeFolderName(clientName))throw new Error('The saved client folder has been renamed in Drive. Restore its client name before moving this project.');
+  const params=new URLSearchParams({supportsAllDrives:'true',fields:DRIVE_FIELDS,addParents:parent.id});
+  const previous=(project.parents||[]).filter(id=>id!==parent.id);
+  if(previous.length)params.set('removeParents',previous.join(','));
+  const moved=await (await this.api.request('files/'+encodeURIComponent(project.id)+'?'+params,{method:'PATCH',headers:{'Content-Type':'application/json'},body:'{}'})).json() as DriveFile;
+  return {project:moved,parent};
+ }
  async project(project:{id:string;client:string;name:string}){
   const client=await this.ensure('client:'+normalizeFolderName(project.client),project.client.trim(),this.root,true);
   const folder=await this.ensure('project:'+project.id,project.name.trim(),client.file.id);

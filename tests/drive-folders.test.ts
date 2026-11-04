@@ -27,6 +27,12 @@ function fixture(initial:DriveFile[]=[]){
    if(files.has(body.id))return Response.json({error:{message:'Already created'}},{status:409});
    const file={...body,capabilities:{canAddChildren:true}};files.set(body.id,file);creates++;return Response.json(file);
   }
+  if(path.startsWith('files/')&&method==='PATCH'){
+   const file=files.get(path.slice(6));if(!file)return Response.json({error:{message:'Missing'}},{status:404});
+   assert.deepEqual(body,{});const remove=u.searchParams.get('removeParents')?.split(',')||[];
+   const parents=(file.parents||[]).filter(id=>!remove.includes(id));const add=u.searchParams.get('addParents');if(add&&!parents.includes(add))parents.push(add);
+   const moved={...file,parents};files.set(file.id,moved);return Response.json(moved);
+  }
   if(path.startsWith('files/')){const file=files.get(path.slice(6));return file?Response.json(file):Response.json({error:{message:'Missing'}},{status:404})}
   throw new Error('Unexpected request '+raw);
  };
@@ -73,4 +79,13 @@ test('sharing is a one-time migration per saved link, independent from folder cr
  assert(!needsDriveLinkSharing(saved));assert(!needsDriveFolderSetup(saved));
  assert(needsDriveLinkSharing({...saved,deliverablesUrl:url+'-changed'}));
  assert(!needsDriveLinkSharing({deliverablesUrl:'https://example.com/folder'}));
+});
+
+test('client reassignment moves the same project folder with its files and reuses the destination client',async()=>{
+ const real=globalThis.fetch,f=fixture([{id:'old',name:'Old Artist',mimeType:DRIVE_FOLDER},{id:'new',name:'New Artist',mimeType:DRIVE_FOLDER},{id:'album',name:'Keep This Title',mimeType:DRIVE_FOLDER,parents:['old']},{id:'mix',name:'Mix.wav',mimeType:'audio/wav',parents:['album']}]);globalThis.fetch=f.fetchMock;
+ try{const m=await manager();const moved=await m.moveProjectToClient('album','New Artist');assert.equal(moved?.project.id,'album');assert.equal(moved?.project.name,'Keep This Title');assert.deepEqual(moved?.project.parents,['new']);assert.deepEqual(f.files.get('mix')?.parents,['album']);assert.equal(f.files.get('old')?.name,'Old Artist');assert.equal(f.creates,0);await (await manager()).moveProjectToClient('album','New Artist');assert.equal(f.creates,0)}finally{globalThis.fetch=real}
+});
+test('moving to a new client creates only its folder, without rebuilding deleted project subfolders',async()=>{
+ const real=globalThis.fetch,f=fixture([{id:'old',name:'Old Artist',mimeType:DRIVE_FOLDER},{id:'album',name:'Album',mimeType:DRIVE_FOLDER,parents:['old']},{id:'master',name:'Master.wav',mimeType:'audio/wav',parents:['album']}]);globalThis.fetch=f.fetchMock;
+ try{const result=await (await manager()).moveProjectToClient('album','New Artist');assert.equal(result?.parent.name,'New Artist');assert.equal(f.creates,1);assert.deepEqual(f.files.get('master')?.parents,['album']);assert(![...f.files.values()].some(f=>f.name==='EDITS'));f.files.get('album')!.trashed=true;assert.equal(await (await manager()).moveProjectToClient('album','Another Artist'),null);assert.equal(f.creates,1);f.files.delete('album');await assert.rejects((await manager()).moveProjectToClient('album','Another Artist'));assert.equal(f.creates,1)}finally{globalThis.fetch=real}
 });

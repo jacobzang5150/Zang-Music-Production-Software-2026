@@ -215,3 +215,11 @@ test('Drive rename merge preserves progress and rejects concurrent project renam
  const single={...before,type:'Single' as const,songs:[{...p.songs[0],name:p.name}]};
  assert.equal(mergeDriveName(single,{expectedName:p.name,expectedPending:false,name:'New single'})!.songs[0].name,'New single');
 });
+
+test('client changes queue a Drive move and unrelated edits preserve the pending flag',async()=>{
+ const {driveClientPendingAfterSave}=await import('../lib/projects.ts');
+ assert.equal(driveClientPendingAfterSave(p,{...p,client:'New Artist'}),true);
+ assert.equal(driveClientPendingAfterSave({...p,driveClientPending:true},{...p,name:'New title'}),true);
+ assert.equal(driveClientPendingAfterSave({...p,driveClientPending:true},{...p,driveClientPending:false}),false);
+ assert.equal(driveClientPendingAfterSave(undefined,p),undefined);
+});

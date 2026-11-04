@@ -3,7 +3,7 @@ import {DriveAuthSchema} from '../../../lib/drive-auth-schema.ts';
 import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
 import {LeadSchema} from '../../../lib/leads.ts';
 import {ClientSchema} from '../../../lib/clients.ts';
-import {ProjectSchema,applyDeliveryTransition,driveNamePendingAfterSave,type Project} from '../../../lib/projects.ts';
+import {ProjectSchema,applyDeliveryTransition,driveNamePendingAfterSave,driveClientPendingAfterSave,type Project} from '../../../lib/projects.ts';
 import publicKey from './public-key.json' with {type:'json'};
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 Deno.serve(async(req:Request)=>{
@@ -92,7 +92,7 @@ Deno.serve(async(req:Request)=>{
       if(revision!>0&&claims.action!=='import'){q.set('id','eq.'+p.id);q.set('revision','eq.'+revision);const existing=await getRows(table,q);if(!existing.length)return reply({error:'This record changed in another tab. Reload before editing.'},409);previous=existing[0].data;}
       if(resource==='projects'){
         const project=p as Project;const client=await ensureClient(project.client,project.clientId);if(!client)return reply({error:'Client not found. Select a saved client or create a new one.'},400);
-        p=applyDeliveryTransition(previous,{...project,driveNameSynced:project.driveNameSynced??previous?.driveNameSynced,driveNamePending:driveNamePendingAfterSave(previous,project),onHold:project.onHold??previous?.onHold,notes:project.notes??previous?.notes,deliverablesUrl:project.deliverablesUrl??previous?.deliverablesUrl,driveSharingProcessedUrl:project.driveSharingProcessedUrl??previous?.driveSharingProcessedUrl,clientId:client.id,client:client.name});
+        p=applyDeliveryTransition(previous,{...project,driveClientPending:driveClientPendingAfterSave(previous,{...project,clientId:client.id,client:client.name}),driveNameSynced:project.driveNameSynced??previous?.driveNameSynced,driveNamePending:driveNamePendingAfterSave(previous,project),onHold:project.onHold??previous?.onHold,notes:project.notes??previous?.notes,deliverablesUrl:project.deliverablesUrl??previous?.deliverablesUrl,driveSharingProcessedUrl:project.driveSharingProcessedUrl??previous?.driveSharingProcessedUrl,clientId:client.id,client:client.name});
       }else await ensureClient(p.name);
       if(revision===0||claims.action==='import'){
         if(claims.action==='import'){if(revision!<1)return reply({error:'Invalid revision'},400);q.set('on_conflict','owner,id');}

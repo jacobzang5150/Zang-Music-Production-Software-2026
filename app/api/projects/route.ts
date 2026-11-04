@@ -9,7 +9,7 @@ export async function GET(){const user=await getChatGPTUser();if(!user)return Re
 // Background metadata must merge against the latest record, never a stale UI snapshot.
 export async function PATCH(req:Request){
  const user=await getChatGPTUser();if(!user)return Response.json({error:'Sign in to save projects.'},{status:401});
- const input=z.object({id:z.string().min(1).max(80),url:z.string().url(),nameSync:z.object({expectedName:z.string(),expectedPending:z.boolean(),name:z.string().trim().min(1).max(160)}).optional()}).safeParse(await req.json().catch(()=>null));
+ const input=z.object({id:z.string().min(1).max(80),url:z.string().url(),clientSync:z.object({expectedClient:z.string(),expectedClientId:z.string().optional()}).optional(),nameSync:z.object({expectedName:z.string(),expectedPending:z.boolean(),name:z.string().trim().min(1).max(160)}).optional()}).safeParse(await req.json().catch(()=>null));
  if(!input.success)return Response.json({error:'Invalid sharing status.'},{status:400});
  try{
   for(let attempt=0;attempt<5;attempt++){
@@ -17,10 +17,12 @@ export async function PATCH(req:Request){
    const records=await listed.json() as (z.infer<typeof ProjectSchema>&{revision:number})[];
    const latest=records.find(p=>p.id===input.data.id);if(!latest)return Response.json({error:'Project no longer exists.'},{status:404});
    if(latest.deliverablesUrl!==input.data.url)return Response.json(latest);
-   const sync=input.data.nameSync;
-   if(!sync&&latest.driveSharingProcessedUrl===input.data.url)return Response.json(latest);
-   const project=sync?mergeDriveName(latest,sync):{...latest,driveSharingProcessedUrl:input.data.url};
+   const sync=input.data.nameSync,clientSync=input.data.clientSync;
+   if(clientSync&&(latest.client!==clientSync.expectedClient||latest.clientId!==clientSync.expectedClientId))return Response.json(latest);
+   if(!sync&&!clientSync&&latest.driveSharingProcessedUrl===input.data.url)return Response.json(latest);
+   const project=sync?mergeDriveName(latest,sync):clientSync?{...latest}:{...latest,driveSharingProcessedUrl:input.data.url};
    if(!project)return Response.json(latest);
+   if(clientSync)project.driveClientPending=false;
    const saved=await callStudioDatabase({owner:user.userId,action:'save',revision:latest.revision,project});
    if(saved.status===409){await saved.body?.cancel();continue;}
    return new Response(saved.body,{status:saved.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
