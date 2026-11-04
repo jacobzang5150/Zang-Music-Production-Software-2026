@@ -39,7 +39,8 @@ export function useDriveNames(projects:Saved[],paused:boolean,onSaved:(p:Saved)=
       const result=await saved.json() as Saved&{error?:string};if(!saved.ok)throw new Error(result.error||'Could not sync the folder name.');
       if(alive.current){state.current.onSaved(result);window.dispatchEvent(new CustomEvent('session-drive-name-synced',{detail:{id:folder.id,name:folder.name}}));}
      }catch(e){
-      if(e instanceof DriveError&&e.status===404){failures.push(`${p.client} / ${p.name}: The linked Drive folder is missing or this Google account cannot access it.`);continue;}
+      // Deleted project folders are expected after delivery; never notify or recreate them.
+      if(e instanceof DriveError&&e.status===404)continue;
       if(e instanceof DriveError&&e.status===401){forgetDriveToken();void restoreDriveConnection();break;}
       failures.push(`${p.client} / ${p.name}: ${(e as Error).message}`);
      }
