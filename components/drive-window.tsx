@@ -43,6 +43,15 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   document.addEventListener('keydown',key,true);window.addEventListener('beforeunload',leaving);
   return()=>{alive.current=false;request.current++;readController.current?.abort();writeController.current?.abort();mediaController.current?.abort();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);document.body.style.overflow=overflow;document.removeEventListener('keydown',key,true);window.removeEventListener('beforeunload',leaving);previous?.focus()};
  },[]);
+ useEffect(()=>{
+  const renamed=(event:Event)=>{
+   const change=(event as CustomEvent<{id:string;name:string}>).detail;if(!change)return;
+   const update=(file:DriveFile)=>file.id===change.id?{...file,name:change.name}:file;
+   setFiles(files=>files.map(update));setTrail(path=>path.map(update));setMedia(value=>value?{...value,file:update(value.file)}:value);
+  };
+  window.addEventListener('session-drive-name-synced',renamed);
+  return()=>window.removeEventListener('session-drive-name-synced',renamed);
+ },[]);
  async function setup(){setConfigLoading(true);setError('');try{const c=await prepareDrive();if(alive.current)setConfig(c)}catch(e){if(alive.current)setError((e as Error).message)}finally{if(alive.current)setConfigLoading(false)}}
  useEffect(()=>{void setup();const auth=()=>setToken(currentDriveToken());window.addEventListener('session-drive-auth',auth);void restoreDriveConnection();return()=>window.removeEventListener('session-drive-auth',auth)},[]);
  function failure(e:unknown){if(!alive.current||(e as Error).name==='AbortError')return;if(e instanceof DriveError&&e.status===401){forgetDriveToken();setToken(null);void restoreDriveConnection()}setError((e as Error).message||'Something went wrong. Please retry.')}

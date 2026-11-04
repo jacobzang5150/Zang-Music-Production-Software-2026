@@ -6,17 +6,18 @@ import type {Project} from '@/lib/projects';
 type Saved=Project&{revision:number};
 export function useDriveNames(projects:Saved[],paused:boolean,onSaved:(p:Saved)=>void){
  const state=useRef({paused,onSaved});state.current={paused,onSaved};
- const working=useRef(false),alive=useRef(true);
+ const working=useRef(false),alive=useRef(true),requested=useRef(0);
  const [tick,setTick]=useState(0),[error,setError]=useState('');
  const signature=JSON.stringify(projects.map(p=>[p.id,p.name,p.deliverablesUrl,p.driveNamePending,p.driveNameSynced]));
  useEffect(()=>{
   alive.current=true;const wake=()=>{if(document.visibilityState==='visible')setTick(n=>n+1)};
-  const interval=setInterval(wake,60000);
+  const interval=setInterval(wake,15000);
   window.addEventListener('session-drive-auth',wake);window.addEventListener('session-drive-files-changed',wake);window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);
   return()=>{alive.current=false;clearInterval(interval);window.removeEventListener('session-drive-auth',wake);window.removeEventListener('session-drive-files-changed',wake);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake)};
  },[]);
  useEffect(()=>{
-  const token=currentDriveToken();if(!token||paused||working.current||document.visibilityState!=='visible')return;
+  const token=currentDriveToken();if(!token||paused||document.visibilityState!=='visible')return;
+  const run=++requested.current;if(working.current)return;
   working.current=true;
   const valid=()=>alive.current&&!state.current.paused&&currentDriveToken()===token;
   void(async()=>{
@@ -24,7 +25,7 @@ export function useDriveNames(projects:Saved[],paused:boolean,onSaved:(p:Saved)=
     // Read fresh records before changing Drive, including edits made in another tab.
     const response=await fetch('/api/projects',{cache:'no-store'});if(!response.ok)throw new Error('Could not check project folder names.');
     const latest=await response.json() as Saved[];const api=new DriveApi(token);const failures:string[]=[];
-    for(const p of latest){
+    for(const p of latest.sort((a,b)=>Number(!!b.driveNamePending)-Number(!!a.driveNamePending))){
      if(!valid())break;
      const link=parseDriveLink(p.deliverablesUrl||'');if(!link)continue;
      if(link.resourceKey)api.keys.set(link.id,link.resourceKey);
@@ -36,15 +37,15 @@ export function useDriveNames(projects:Saved[],paused:boolean,onSaved:(p:Saved)=
       if(!folder.name.trim()||folder.name.length>160)throw new Error('Use a folder name of 1–160 characters to sync with Session.');
       const saved=await fetch('/api/projects',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id,url:p.deliverablesUrl,nameSync:{expectedName:p.name,expectedPending:!!p.driveNamePending,name:folder.name}})});
       const result=await saved.json() as Saved&{error?:string};if(!saved.ok)throw new Error(result.error||'Could not sync the folder name.');
-      if(alive.current)state.current.onSaved(result);
+      if(alive.current){state.current.onSaved(result);window.dispatchEvent(new CustomEvent('session-drive-name-synced',{detail:{id:folder.id,name:folder.name}}));}
      }catch(e){
-      if(e instanceof DriveError&&e.status===404)continue;
+      if(e instanceof DriveError&&e.status===404){failures.push(`${p.client} / ${p.name}: The linked Drive folder is missing or this Google account cannot access it.`);continue;}
       if(e instanceof DriveError&&e.status===401){forgetDriveToken();void restoreDriveConnection();break;}
       failures.push(`${p.client} / ${p.name}: ${(e as Error).message}`);
      }
     }
     if(alive.current)setError(failures[0]||'');
-   }catch(e){if(alive.current)setError((e as Error).message)}finally{working.current=false;}
+   }catch(e){if(alive.current)setError((e as Error).message)}finally{working.current=false;if(alive.current&&!state.current.paused&&requested.current!==run)setTick(n=>n+1);}
   })();
  },[signature,paused,tick]);
  return error;
