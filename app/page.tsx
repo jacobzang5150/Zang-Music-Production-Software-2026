@@ -44,7 +44,7 @@ async function saveForm(p:RecordProject){
  setBusy(true);setFormError('');
  try{if(!p.clientId){const r=await fetch('/api/clients',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:uid(),name:p.client,revision:0})});const c=await r.json() as Client&{error?:string};if(!r.ok)throw new Error(c.error||'Could not save client');p={...p,clientId:c.id,client:c.name};}await save(p,true);}catch(e){setFormError((e as Error).message)}finally{setBusy(false)}
 }
-const queue=rankProjects(projects,today) as RecordProject[],nextSession=queue.find(p=>!p.onHold),active=projects.filter(p=>!p.deliveredAt),current=projects.find(p=>p.id===selected);const shown=(view==='Work queue'?queue:projects).filter(p=>(view==='Work queue'||matchesProjectFilter(p,filter))&&`${p.name} ${p.client}`.toLowerCase().includes(query.toLowerCase())).sort(view==='Work queue'?()=>0:filter==='Completed'?compareCompletedProjects:(a,b)=>(a.deadline||'9999-12-31').localeCompare(b.deadline||'9999-12-31')||a.client.localeCompare(b.client));
+const queue=rankProjects(projects,today) as RecordProject[],nextSession=queue.find(p=>!p.onHold),active=projects.filter(p=>!p.deliveredAt),current=projects.find(p=>p.id===selected);const shown=(view==='Work queue'?queue:projects).filter(p=>(view==='Work queue'||matchesProjectFilter(p,filter))&&`${p.name} ${p.client}`.toLowerCase().includes(query.toLowerCase())).sort(view==='Work queue'?()=>0:(a,b)=>Number(!!a.onHold)-Number(!!b.onHold)||(filter==='Completed'?compareCompletedProjects(a,b):(a.deadline||'9999-12-31').localeCompare(b.deadline||'9999-12-31')||a.client.localeCompare(b.client)));
 useEffect(()=>{
  if(!draft||!window.visualViewport)return;
  const viewport=window.visualViewport;
