@@ -112,7 +112,7 @@ Deno.serve(async(req:Request)=>{
         if(!r.ok)return reply({error:r.status===409?'Record already exists. Reload before editing.':'Unable to save record'},r.status===409?409:502);
         if(resource==='projects'){
           // Initialization is idempotent; opening a legacy project also creates its budget.
-          await fetch(root+'studio_budgets?on_conflict=owner,id',{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({owner:claims.owner,id:p.id,data:createBudget(p as Project),revision:1})});
+          try{await fetch(root+'studio_budgets?on_conflict=owner,id',{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({owner:claims.owner,id:p.id,data:createBudget(p as Project),revision:1})});}catch{console.warn('Budget initialization deferred until first open');}
         }
         return reply({...p,revision:claims.action==='import'?revision:1});
       }

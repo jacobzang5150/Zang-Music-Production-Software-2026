@@ -9,7 +9,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
  const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
  const privateKey=await crypto.subtle.exportKey('jwk',pair.privateKey),publicKey=await crypto.subtle.exportKey('jwk',pair.publicKey);
  let handler:(r:Request)=>Promise<Response>;const g=globalThis as any,oldDeno=g.Deno,oldFetch=globalThis.fetch;
- const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[],studio_drive_auth:[]};
+ const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[],studio_drive_auth:[],studio_budgets:[]};
  g.__gatewayTestKey=publicKey;g.Deno={env:{get:(k:string)=>({SUPABASE_URL:'https://test.invalid',SUPABASE_SECRET_KEYS:'{"default":"sb_secret_test"}'} as Record<string,string>)[k]},serve:(h:typeof handler)=>{handler=h}};
  globalThis.fetch=async(input:any,options:any={})=>{
   const url=new URL(String(input)),table=url.pathname.split('/').at(-1)!;let rows=tables[table];assert(rows,table);
@@ -25,7 +25,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   let source=await readFile(new URL('supabase/functions/studio-data/index.ts',root),'utf8');
   source=source.replace("import publicKey from './public-key.json' with {type:'json'};",'const publicKey=globalThis.__gatewayTestKey;').replaceAll("'../../../lib/","'../lib/");
   await mkdir(new URL('.sites-runtime/',root),{recursive:true});await writeFile(file,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);await import(file.href);
-  async function call(resource:'projects'|'clients'|'folders'|'driveAuth',action:'list'|'save'|'import'|'delete',extra:Record<string,unknown>={},owner='owner-a'){
+  async function call(resource:'projects'|'clients'|'folders'|'driveAuth'|'budgets',action:'list'|'save'|'import'|'delete',extra:Record<string,unknown>={},owner='owner-a'){
    const token=await signGatewayRequest(privateKey,{owner,resource,action,...extra});const response=await handler(new Request('https://edge.invalid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}));return {status:response.status,data:await response.json() as any};
   }
   let r=await call('clients','save',{project:{id:'ignored',name:'Artist'},revision:0});assert.equal(r.status,200);const client=r.data;
@@ -34,6 +34,15 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   const draft=newOverdub();draft.name='Song';draft.client=client.name;draft.clientId=client.id;draft.songs[0].name='Song';
   r=await call('projects','save',{project:draft,revision:0},'owner-b');assert.equal(r.status,400);
   r=await call('projects','save',{project:draft,revision:0});assert.equal(r.status,200);let project=r.data;
+  assert.equal(tables.studio_budgets.length,1);
+  let budget=await call('budgets','list',{id:project.id});assert.equal(budget.data[0].revision,1);const workbook=budget.data[0];
+  budget=await call('budgets','list',{id:project.id},'owner-b');assert.deepEqual(budget.data,[]);
+  budget=await call('budgets','save',{project:workbook,revision:1},'owner-b');assert.equal(budget.status,404);
+  budget=await call('budgets','save',{project:workbook,revision:1});assert.equal(budget.status,200);assert.equal(budget.data.revision,2);
+  budget=await call('budgets','save',{project:workbook,revision:1});assert.equal(budget.status,409);
+  budget=await call('budgets','save',{project:workbook,revision:0});assert.equal(budget.status,409);
+  assert.equal(tables.studio_projects[0].revision,project.revision);
+
   r=await call('projects','save',{project:{...project,deliveredAt:'2000-01-01T00:00:00.000Z'},revision:project.revision});assert.equal(r.status,200);project=r.data;assert.notEqual(project.deliveredAt,'2000-01-01T00:00:00.000Z');const deliveredAt=project.deliveredAt;
   r=await call('projects','save',{project:{...project,name:'Edited'},revision:project.revision});assert.equal(r.status,200);project=r.data;assert.equal(project.deliveredAt,deliveredAt);
   r=await call('projects','save',{project,revision:1});assert.equal(r.status,409);
