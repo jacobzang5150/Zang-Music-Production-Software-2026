@@ -39,3 +39,4 @@ test('category threads combine repeated names while keeping named categories sep
  const explicit=rows.map(row=>({...row,categoryId:row.id}));assert.equal(groupBudgetRows(explicit).length,rows.length);
  assert.equal(sectionTotal(groups.flatMap(group=>group.rows)),sectionTotal(rows));
 });
+

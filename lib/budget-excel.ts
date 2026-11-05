@@ -52,3 +52,4 @@ export async function importBudgetExcel(file:File):Promise<BudgetModel>{
  if(!sheets.length||sheets.length>20)throw new Error('Choose a budget with 1–20 visible worksheets.');
  return BudgetModelSchema.parse(readBudgetModel({id:'import',templateTitle:false,sheets} as Budget));
 }
+

@@ -74,3 +74,4 @@ export function readBudgetModel(budget:Budget):BudgetModel{
 export function writeBudgetModel(budget:Budget,model:BudgetModel):Budget{
  return {...budget,sheets:budget.sheets.map((sheet,i)=>i===0?{...sheet,sessionBudget:BudgetModelSchema.parse(model)}:sheet)};
 }
+
