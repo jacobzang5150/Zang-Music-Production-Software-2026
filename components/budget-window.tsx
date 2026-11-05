@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useRef,useState,useCallback,type PointerEvent as ReactPointerEvent} from 'react';
-import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight,MoreHorizontal,GripVertical} from 'lucide-react';
+import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight,MoreHorizontal,GripVertical,Link2} from 'lucide-react';
 import {BudgetSchema,type Budget} from '@/lib/budget';
 import {BudgetModelSchema,readBudgetModel,writeBudgetModel,newBudgetLine,isPianoTuning,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,setBudgetDropdown,type BudgetModel,type BudgetLine} from '@/lib/budget-model';
 import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange} from '@/lib/budget-history';
@@ -8,13 +8,14 @@ import {moveBudgetRow,type BudgetMove} from '@/lib/budget-order';
 import {useBudgetDrag} from './budget-drag';
 import './budget.css';
 import BudgetSharing from './budget-sharing';
-import {sameBudgetVersion,type SavedBudget} from '@/lib/budget-sharing';
+import {sameBudgetVersion,budgetHeading,type SavedBudget} from '@/lib/budget-sharing';
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const units=[['song','per song'],['hour','per hour'],['day','per day'],['session','per session'],['tuning','per tuning']] as const;
 const numberValue=(value:string,max:number)=>value===''?null:Math.min(max,Math.max(0,Number(value)||0));
 export default function BudgetWindow({project,importFile,onClose}:{project:{id:string;client:string;name:string};importFile:File|null;onClose:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null),input=useRef<HTMLInputElement>(null);
  const [model,setModel]=useState<BudgetModel|null>(null),[status,setStatus]=useState('Opening budget…'),[error,setError]=useState(''),[working,setWorking]=useState(false),[canUndo,setCanUndo]=useState(false);
+ const [sharingOpen,setSharingOpen]=useState(false);
  const [budgetInfo,setBudgetInfo]=useState<SavedBudget|null>(null);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const record=useRef<SavedBudget|null>(null),modelRef=useRef<BudgetModel|null>(null),pending=useRef<BudgetModel|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null),saving=useRef<Promise<boolean>|null>(null),imported=useRef(false),mounted=useRef(true);
@@ -98,7 +99,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  },[project.id,working,acceptBudget]);
 
  async function close(){if(working)return;drag.cancel();setWorking(true);try{if(await flush()){dialog.current?.close();onClose()}}finally{if(mounted.current)setWorking(false)}}
- async function download(){if(!modelRef.current)return;setError('');try{const {exportBudgetExcel}=await import('@/lib/budget-excel');const blob=await exportBudgetExcel(modelRef.current,record.current?.budgetKey?.startsWith('shared:')?{client:'Shared budget',name:(record.current.linkedProjects||[]).map(p=>p.client+' — '+p.name).join(' / ')}:project),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${project.client} - ${project.name} - Budget.xlsx`.replace(/[\\/:*?"<>|]/g,'-');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{setError('Could not export this budget. Please retry.')}}
+ async function download(){if(!modelRef.current)return;setError('');try{const heading=budgetHeading(project,record.current);const {exportBudgetExcel}=await import('@/lib/budget-excel');const blob=await exportBudgetExcel(modelRef.current,heading),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${heading.client} - ${heading.name} - Budget.xlsx`.replace(/[\\/:*?"<>|]/g,'-');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{setError('Could not export this budget. Please retry.')}}
  function updateRow(sectionId:string,rowId:string,patch:Partial<BudgetLine>){if(!model)return;changed({...model,sections:model.sections.map(section=>section.id!==sectionId?section:{...section,rows:section.rows.map(row=>{if(row.id!==rowId)return row;const next={...row,...patch};if(next.unit==='tuning'&&!isPianoTuning(next.name))next.unit='hour';return next})})},sectionId+':'+rowId+':'+Object.keys(patch).join(','))}
  function renameCategory(sectionId:string,categoryId:string,name:string){
   if(!model)return;const section=model.sections.find(s=>s.id===sectionId),category=section&&groupBudgetRows(section.rows).find(c=>c.id===categoryId);if(!category)return;
@@ -135,11 +136,12 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
      </div>;
  }
  function remove(next:BudgetModel){changed(next)}
+ const heading=budgetHeading(project,budgetInfo),linked=(budgetInfo?.linkedProjects?.length||0)>1;
  return <dialog ref={dialog} className="budget-dialog" aria-labelledby="budget-title" onCancel={e=>{e.preventDefault();void close()}} onClick={e=>{if(e.target===dialog.current)void close()}}><div className="budget-frame" onDragOver={e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault()}} onDrop={e=>{e.preventDefault();if(!working&&record.current&&e.dataTransfer.files[0])void replace(e.dataTransfer.files[0])}}>
-  <div className="budget-toolbar"><div><div className="budget-eyebrow">PROJECT BUDGET</div><h2 id="budget-title">{project.client} <span>— {project.name}</span></h2><small role="status">{status}</small></div><div className="budget-actions"><input ref={input} type="file" accept=".xlsx" hidden onChange={e=>{if(e.target.files?.[0])void replace(e.target.files[0])}}/><button className="secondary" aria-label="Import .xlsx" disabled={!model||working} onClick={()=>input.current?.click()}><Upload size={16}/><span>Import .xlsx</span></button><button className="secondary" aria-label="Download .xlsx" disabled={!model||working} onClick={()=>void download()}><Download size={16}/><span>Download .xlsx</span></button><button className="budget-close" aria-label="Close budget" disabled={working} onClick={()=>void close()}><X size={22}/></button></div></div>
+  <div className="budget-toolbar"><div><div className="budget-eyebrow">PROJECT BUDGET</div><h2 id="budget-title">{heading.client} <span>- {heading.name}</span></h2>{linked&&<span className="budget-linked-label"><Link2 size={12}/> Linked</span>}<small role="status">{status}</small></div><div className="budget-actions"><button className="secondary" aria-label="Link Projects" aria-expanded={sharingOpen} aria-controls="budget-sharing-panel" disabled={!model||working} onClick={()=>setSharingOpen(!sharingOpen)}><Link2 size={16}/><span>Link Projects</span></button><input ref={input} type="file" accept=".xlsx" hidden onChange={e=>{if(e.target.files?.[0])void replace(e.target.files[0])}}/><button className="secondary" aria-label="Import .xlsx" disabled={!model||working} onClick={()=>input.current?.click()}><Upload size={16}/><span>Import .xlsx</span></button><button className="secondary" aria-label="Download .xlsx" disabled={!model||working} onClick={()=>void download()}><Download size={16}/><span>Download .xlsx</span></button><button className="budget-close" aria-label="Close budget" disabled={working} onClick={()=>void close()}><X size={22}/></button></div></div>
   {error&&<div className="budget-error" role="alert">{error}<button onClick={()=>void(model?flush():load())}><RotateCcw size={14}/> Retry</button>{model&&<button onClick={()=>{if(confirm('Discard unsaved budget changes and reload the saved budget?'))void load()}}>Reload saved budget</button>}</div>}
   <div className="budget-scroll">{!model?<div className="budget-placeholder">{status}</div>:<>
-   {budgetInfo&&<BudgetSharing budget={budgetInfo} busy={working} onChange={changeSharing}/>}
+   {budgetInfo&&<BudgetSharing budget={budgetInfo} busy={working} open={sharingOpen} onClose={()=>setSharingOpen(false)} onChange={changeSharing}/>}
    <div className="budget-body-title">{canUndo&&<button className="budget-text-button" disabled={working} title="Undo (Command+Z)" onClick={undoBudget}><RotateCcw size={14}/> Undo</button>}<div className="budget-summary"><label className="budget-estimate"><span>AGREED ESTIMATE</span><div><span aria-hidden="true">$</span><input aria-label="Agreed project estimate" type="number" inputMode="decimal" min={0} max={1e12} step="any" placeholder="0.00" disabled={working} value={model.estimate??''} onChange={e=>changed({...model,estimate:numberValue(e.target.value,1e12)},'estimate')}/></div></label><span className="budget-total-caption">PROJECT TOTAL <strong>{money.format(budgetTotal(model))}</strong></span><span className={'budget-total-caption budget-remaining'+((budgetRemaining(model)??0)<0?' is-over-budget':'')}><span>{(budgetRemaining(model)??0)<0?'OVER BUDGET':'REMAINING'}</span><output aria-label="Remaining project budget">{budgetRemaining(model)===null?'—':money.format(Math.abs(budgetRemaining(model)!))}</output></span></div></div>
    <fieldset className="budget-fields" disabled={working}><div className="budget-layout"><div className="budget-expenses">
     {model.sections.map(section=><div className="budget-section" key={section.id}>
