@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import {BudgetSchema,createBudget} from '../lib/budget.ts';
-import {readBudgetModel,writeBudgetModel,BudgetModelSchema,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows} from '../lib/budget-model.ts';
+import {readBudgetModel,writeBudgetModel,BudgetModelSchema,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,setBudgetDropdown} from '../lib/budget-model.ts';
 import {exportBudgetExcel,importBudgetExcel} from '../lib/budget-excel.ts';
 const project={id:'project',client:'Artist',name:'Record'};
 test('existing budget converts preset rates, units, quantities and custom musician rows without changing its source',()=>{
@@ -32,11 +32,18 @@ test('estimate defaults to unset for existing budgets and tracks remaining or ov
  assert.equal(readBudgetModel(BudgetSchema.parse(writeBudgetModel(createBudget(project),model))).estimate,0);
  assert.equal(BudgetModelSchema.safeParse({...model,estimate:-1}).success,false);
 });
-test('category threads combine repeated names while keeping named categories separate',()=>{
- const model=readBudgetModel(createBudget(project)),rows=model.sections[1].rows,groups=groupBudgetRows(rows);
- const overdubs=groups.find(group=>group.name==='Home Overdubs')!;assert.equal(overdubs.rows.length,5);
- assert.deepEqual(overdubs.rows.map(row=>row.details),['Electric Guitar','Acoustic Guitar','Keys','Bass','Percussion']);
- const explicit=rows.map(row=>({...row,categoryId:row.id}));assert.equal(groupBudgetRows(explicit).length,rows.length);
- assert.equal(sectionTotal(groups.flatMap(group=>group.rows)),sectionTotal(rows));
+test('categories are flat by default, including old grouped categories',()=>{
+ const rows=readBudgetModel(createBudget(project)).sections[1].rows;
+ const defaults=groupBudgetRows(rows);assert.equal(defaults.length,rows.length);assert.ok(defaults.every(group=>!group.dropdown&&group.rows.length===1));
+ const legacy=rows.map(row=>({...row,categoryId:'old-category'}));assert.equal(groupBudgetRows(legacy).length,rows.length);
 });
-
+test('dropdown selection persists and disabling it preserves every item and cost',()=>{
+ const model=readBudgetModel(createBudget(project)),base=model.sections[0].rows[0];
+ const enabled=setBudgetDropdown([base],base.id,true);const child={...base,id:'child',parentId:base.id,dropdown:false,details:'Assistant',rate:40,quantity:2};
+ model.sections[0].rows=[...enabled,child];const originalTotal=budgetTotal(model);
+ const saved=readBudgetModel(BudgetSchema.parse(writeBudgetModel(createBudget(project),model)));
+ let groups=groupBudgetRows(saved.sections[0].rows);assert.equal(groups.length,1);assert.equal(groups[0].dropdown,true);assert.equal(groups[0].rows.length,2);
+ const flat=setBudgetDropdown(saved.sections[0].rows,base.id,false);groups=groupBudgetRows(flat);assert.equal(groups.length,2);assert.ok(groups.every(group=>!group.dropdown));assert.equal(sectionTotal(flat),sectionTotal(model.sections[0].rows));
+ model.sections[0].rows=flat;assert.equal(budgetTotal(model),originalTotal);
+ const orphan=setBudgetDropdown([child],child.id,true);assert.equal(orphan[0].parentId,undefined);assert.equal(groupBudgetRows(orphan)[0].dropdown,true);
+});

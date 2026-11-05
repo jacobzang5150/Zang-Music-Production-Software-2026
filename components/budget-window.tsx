@@ -1,8 +1,8 @@
 'use client';
 import {useEffect,useRef,useState,useCallback} from 'react';
-import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight} from 'lucide-react';
+import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight,MoreHorizontal} from 'lucide-react';
 import {BudgetSchema,type Budget} from '@/lib/budget';
-import {BudgetModelSchema,readBudgetModel,writeBudgetModel,newBudgetLine,isPianoTuning,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,type BudgetModel,type BudgetLine} from '@/lib/budget-model';
+import {BudgetModelSchema,readBudgetModel,writeBudgetModel,newBudgetLine,isPianoTuning,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,setBudgetDropdown,type BudgetModel,type BudgetLine} from '@/lib/budget-model';
 import './budget.css';
 type SavedBudget=Budget&{revision:number};
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
@@ -48,8 +48,8 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  useEffect(()=>{
   mounted.current=true;dialog.current?.showModal();const overflow=document.body.style.overflow;document.body.style.overflow='hidden';
   const warn=(e:BeforeUnloadEvent)=>{if(pending.current||saving.current){e.preventDefault();e.returnValue=''}};
-  const online=()=>void flush();window.addEventListener('beforeunload',warn);window.addEventListener('online',online);
-  return()=>{mounted.current=false;if(timer.current)clearTimeout(timer.current);document.body.style.overflow=overflow;window.removeEventListener('beforeunload',warn);window.removeEventListener('online',online)};
+  const online=()=>void flush();const dismiss=(e:PointerEvent)=>{dialog.current?.querySelectorAll<HTMLDetailsElement>('.budget-category-options[open]').forEach(menu=>{if(!menu.contains(e.target as Node))menu.open=false})};document.addEventListener('pointerdown',dismiss);window.addEventListener('beforeunload',warn);window.addEventListener('online',online);
+  return()=>{mounted.current=false;if(timer.current)clearTimeout(timer.current);document.body.style.overflow=overflow;document.removeEventListener('pointerdown',dismiss);window.removeEventListener('beforeunload',warn);window.removeEventListener('online',online)};
  },[flush]);
  const load=useCallback(async()=>{
   setError('');setStatus('Opening budget…');
@@ -70,10 +70,24 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  }
  function addCategoryItem(sectionId:string,categoryId:string){
   if(!model)return;const section=model.sections.find(s=>s.id===sectionId),category=section&&groupBudgetRows(section.rows).find(c=>c.id===categoryId);if(!category)return;
-  const ids=new Set(category.rows.map(row=>row.id)),lastIndex=Math.max(...category.rows.map(row=>section!.rows.indexOf(row)));
-  const rows=section!.rows.map(row=>ids.has(row.id)?{...row,categoryId}:row);
-  rows.splice(lastIndex+1,0,{...newBudgetLine(),categoryId,name:category.name,unit:category.rows[0].unit});
+  const lastIndex=Math.max(...category.rows.map(row=>section!.rows.indexOf(row)));
+  const rows=[...section!.rows];
+  rows.splice(lastIndex+1,0,{...newBudgetLine(),parentId:category.id,name:category.name,unit:category.rows[0].unit});
   changed({...model,sections:model.sections.map(s=>s.id===sectionId?{...s,rows}:s)});
+ }
+ function categoryOptions(sectionId:string,category:{id:string;name:string;dropdown:boolean}){
+  return <details className="budget-category-options" onKeyDown={e=>{if(e.key==='Escape'&&e.currentTarget.open){e.preventDefault();e.stopPropagation();e.currentTarget.open=false}}}><summary aria-label={'Options for '+(category.name||'category')} title="Category options"><MoreHorizontal size={18}/></summary><div className="budget-category-menu"><button type="button" onClick={e=>{e.currentTarget.closest('details')?.removeAttribute('open');if(!model)return;changed({...model,sections:model.sections.map(s=>s.id===sectionId?{...s,rows:setBudgetDropdown(s.rows,category.id,!category.dropdown)}:s)});setCollapsed({...collapsed,[sectionId+'-'+category.id]:false})}}>{category.dropdown?'Remove dropdown':'Add dropdown'}</button></div></details>;
+ }
+ function rowFields(section:BudgetModel['sections'][number],row:BudgetLine,flat:boolean){
+  const current=model;if(!current)return null;const index=section.rows.findIndex(r=>r.id===row.id);
+  return <div className={flat?"budget-columns budget-line budget-flat-line":"budget-columns budget-line budget-thread-line"} key={row.id}>
+      {flat&&<label className="budget-line-name"><span className="budget-mobile-label">Category</span><input aria-label={`${section.name} item ${index+1} name`} maxLength={200} value={row.name} placeholder="Category name" onChange={e=>updateRow(section.id,row.id,{name:e.target.value})}/></label>}
+      <label className="budget-line-details"><span className="budget-mobile-label">details</span><input aria-label={`${section.name} item ${index+1} details`} maxLength={300} value={row.details} placeholder="details" onChange={e=>updateRow(section.id,row.id,{details:e.target.value})}/></label>
+      <div className="budget-line-rate"><span className="budget-mobile-label">Rate</span><div className="budget-rate-controls"><label><span aria-hidden="true">$</span><input aria-label={`${section.name} item ${index+1} rate`} type="number" inputMode="decimal" min={0} max={1e9} step="any" placeholder="0.00" value={row.rate??''} onChange={e=>updateRow(section.id,row.id,{rate:numberValue(e.target.value,1e9)})}/></label><select aria-label={`${section.name} item ${index+1} rate unit`} value={row.unit} onChange={e=>updateRow(section.id,row.id,{unit:e.target.value as BudgetLine['unit']})}>{units.filter(([unit])=>unit!=='tuning'||isPianoTuning(row.name)).map(([unit,label])=><option key={unit} value={unit}>{label}</option>)}</select></div></div>
+      <label className="budget-line-quantity"><span className="budget-mobile-label">Quantity</span><input aria-label={`${section.name} item ${index+1} quantity`} type="number" inputMode="decimal" min={0} max={1e6} step="any" placeholder="0" value={row.quantity??''} onChange={e=>updateRow(section.id,row.id,{quantity:numberValue(e.target.value,1e6)})}/></label>
+      <output className="budget-line-total" aria-label={`${row.name||'Expense'} total`}><span className="budget-mobile-label">Total</span>{money.format(lineTotal(row))}</output>
+      <div className="budget-row-actions"><button className="budget-remove" aria-label={`Remove ${row.name||'item '+(index+1)}`} title="Remove row" onClick={()=>remove({...current,sections:current.sections.map(s=>s.id===section.id?{...s,rows:s.rows.filter(r=>r.id!==row.id)}:s)})}><X size={16}/></button>{flat&&categoryOptions(section.id,{id:row.id,name:row.name,dropdown:false})}</div>
+     </div>;
  }
  function remove(next:BudgetModel){const previous=model;changed(next);setUndo(previous)}
  return <dialog ref={dialog} className="budget-dialog" aria-labelledby="budget-title" onCancel={e=>{e.preventDefault();void close()}} onClick={e=>{if(e.target===dialog.current)void close()}}><div className="budget-frame" onDragOver={e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault()}} onDrop={e=>{e.preventDefault();if(!working&&record.current&&e.dataTransfer.files[0])void replace(e.dataTransfer.files[0])}}>
@@ -85,15 +99,10 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
     {model.sections.map(section=><div className="budget-section" key={section.id}>
      <div className="budget-columns budget-section-heading"><label className="budget-section-name"><span className="sr-only">Section name</span><input aria-label={`Section name: ${section.name}`} maxLength={200} value={section.name} placeholder="Section name" onChange={e=>changed({...model,sections:model.sections.map(s=>s.id===section.id?{...s,name:e.target.value}:s)})}/></label><span>Rate</span><span>Quantity</span><span>Total</span><button className="budget-remove" aria-label={`Remove section ${section.name}`} title="Remove section" disabled={model.sections.length===1} onClick={()=>remove({...model,sections:model.sections.filter(s=>s.id!==section.id)})}><Trash2 size={15}/></button></div>
      {groupBudgetRows(section.rows).map(category=>{
+      if(!category.dropdown)return rowFields(section,category.rows[0],true);
       const key=section.id+'-'+category.id,open=!collapsed[key],contentId='budget-category-'+key.replace(/[^a-zA-Z0-9_-]/g,'_');
-      return <div className="budget-category" key={category.id}><div className="budget-category-heading"><button type="button" className={'budget-category-toggle'+(open?' is-open':'')} aria-label={(open?'Collapse ':'Expand ')+(category.name||'category')} aria-expanded={open} aria-controls={contentId} onClick={()=>setCollapsed({...collapsed,[key]:open})}><ChevronRight size={17}/></button><input aria-label={section.name+' category '+(category.name||'New category')} maxLength={200} placeholder="Category name" value={category.name} onChange={e=>renameCategory(section.id,category.id,e.target.value)}/><output aria-label={(category.name||'Category')+' category total'}>{money.format(sectionTotal(category.rows))}</output><span className="budget-category-count">{category.rows.length} {category.rows.length===1?'item':'items'}</span></div><div id={contentId} hidden={!open}>
-      {category.rows.map(row=>{const index=section.rows.findIndex(r=>r.id===row.id);return <div className="budget-columns budget-line budget-thread-line" key={row.id}>
-      <label className="budget-line-details"><span className="budget-mobile-label">details</span><input aria-label={`${section.name} item ${index+1} details`} maxLength={300} value={row.details} placeholder="details" onChange={e=>updateRow(section.id,row.id,{details:e.target.value})}/></label>
-      <div className="budget-line-rate"><span className="budget-mobile-label">Rate</span><div className="budget-rate-controls"><label><span aria-hidden="true">$</span><input aria-label={`${section.name} item ${index+1} rate`} type="number" inputMode="decimal" min={0} max={1e9} step="any" placeholder="0.00" value={row.rate??''} onChange={e=>updateRow(section.id,row.id,{rate:numberValue(e.target.value,1e9)})}/></label><select aria-label={`${section.name} item ${index+1} rate unit`} value={row.unit} onChange={e=>updateRow(section.id,row.id,{unit:e.target.value as BudgetLine['unit']})}>{units.filter(([unit])=>unit!=='tuning'||isPianoTuning(row.name)).map(([unit,label])=><option key={unit} value={unit}>{label}</option>)}</select></div></div>
-      <label className="budget-line-quantity"><span className="budget-mobile-label">Quantity</span><input aria-label={`${section.name} item ${index+1} quantity`} type="number" inputMode="decimal" min={0} max={1e6} step="any" placeholder="0" value={row.quantity??''} onChange={e=>updateRow(section.id,row.id,{quantity:numberValue(e.target.value,1e6)})}/></label>
-      <output className="budget-line-total" aria-label={`${row.name||'Expense'} total`}><span className="budget-mobile-label">Total</span>{money.format(lineTotal(row))}</output>
-      <button className="budget-remove" aria-label={`Remove ${row.name||'item '+(index+1)}`} title="Remove row" onClick={()=>remove({...model,sections:model.sections.map(s=>s.id===section.id?{...s,rows:s.rows.filter(r=>r.id!==row.id)}:s)})}><X size={16}/></button>
-     </div>})}
+      return <div className="budget-category" key={category.id}><div className="budget-category-heading"><button type="button" className={'budget-category-toggle'+(open?' is-open':'')} aria-label={(open?'Collapse ':'Expand ')+(category.name||'category')} aria-expanded={open} aria-controls={contentId} onClick={()=>setCollapsed({...collapsed,[key]:open})}><ChevronRight size={17}/></button><input aria-label={section.name+' category '+(category.name||'New category')} maxLength={200} placeholder="Category name" value={category.name} onChange={e=>renameCategory(section.id,category.id,e.target.value)}/><output aria-label={(category.name||'Category')+' category total'}>{money.format(sectionTotal(category.rows))}</output><span className="budget-category-count">{category.rows.length} {category.rows.length===1?'item':'items'}</span>{categoryOptions(section.id,category)}</div><div id={contentId} hidden={!open}>
+      {category.rows.map(row=>rowFields(section,row,false))}
       <button type="button" className="budget-text-button budget-add-item" disabled={section.rows.length>=500} onClick={()=>addCategoryItem(section.id,category.id)}><Plus size={14}/> Add item</button>
       </div></div>;
      })}

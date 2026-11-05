@@ -4,7 +4,7 @@ import type {Budget} from './budget.ts';
 export const rateUnits=['song','hour','day','session','tuning'] as const;
 export type RateUnit=typeof rateUnits[number];
 export const isPianoTuning=(name:string)=>/piano.*tun|tun.*piano/i.test(name);
-const LineSchema=z.object({id:z.string().min(1).max(100),name:z.string().max(200),details:z.string().max(300),categoryId:z.string().min(1).max(100).optional(),rate:z.number().finite().min(0).max(1e9).nullable(),quantity:z.number().finite().min(0).max(1e6).nullable(),unit:z.enum(rateUnits)}).refine(row=>row.unit!=='tuning'||isPianoTuning(row.name),'Per tuning is only available for piano tuning.');
+const LineSchema=z.object({id:z.string().min(1).max(100),name:z.string().max(200),details:z.string().max(300),categoryId:z.string().min(1).max(100).optional(),parentId:z.string().min(1).max(100).optional(),dropdown:z.boolean().optional(),rate:z.number().finite().min(0).max(1e9).nullable(),quantity:z.number().finite().min(0).max(1e6).nullable(),unit:z.enum(rateUnits)}).refine(row=>row.unit!=='tuning'||isPianoTuning(row.name),'Per tuning is only available for piano tuning.');
 export const BudgetModelSchema=z.object({version:z.literal(1),estimate:z.number().finite().min(0).max(1e12).nullable().default(null),sections:z.array(z.object({id:z.string().min(1).max(100),name:z.string().max(200),rows:z.array(LineSchema).max(500)})).min(1).max(50),sessions:z.array(z.object({id:z.string().min(1).max(100),date:z.string().max(200),hours:z.number().finite().min(0).max(1e6).nullable()})).max(500),notes:z.string().max(10000)});
 export type BudgetModel=z.infer<typeof BudgetModelSchema>;
 export type BudgetLine=BudgetModel['sections'][number]['rows'][number];
@@ -15,11 +15,15 @@ export function budgetTotal(model:BudgetModel){return model.sections.reduce((c,s
 
 export function budgetRemaining(model:BudgetModel){return model.estimate===null?null:Math.round((model.estimate-budgetTotal(model))*100)/100}
 export function groupBudgetRows(rows:BudgetLine[]){
- const groups:{id:string;name:string;rows:BudgetLine[]}[]=[],byKey=new Map<string,{id:string;name:string;rows:BudgetLine[]}>();
- for(const row of rows){const normalized=row.name.trim().toLocaleLowerCase('en-US'),key=row.categoryId?'id:'+row.categoryId:normalized?'name:'+normalized:'row:'+row.id;
-  let group=byKey.get(key);if(!group){group={id:row.categoryId||row.id,name:row.name,rows:[]};byKey.set(key,group);groups.push(group)}group.rows.push(row);
- }
- return groups;
+ const parents=new Map(rows.filter(row=>row.dropdown===true&&!row.parentId).map(row=>[row.id,row]));
+ return rows.filter(row=>!row.parentId||!parents.has(row.parentId)).map(row=>({id:row.id,name:row.name,dropdown:row.dropdown===true,rows:[row,...(parents.has(row.id)?rows.filter(child=>child.parentId===row.id&&child.id!==row.id):[])]}));
+}
+export function setBudgetDropdown(rows:BudgetLine[],rowId:string,enabled:boolean):BudgetLine[]{
+ return rows.map(row=>{
+  if(row.id===rowId){const {parentId,...rest}=row;return {...rest,dropdown:enabled}}
+  if(!enabled&&row.parentId===rowId){const {parentId,...rest}=row;return rest}
+  return row;
+ });
 }
 
 type Cell={v?:unknown;m?:string;f?:string;ct?:{fa?:string};[key:string]:unknown};
