@@ -1,5 +1,5 @@
 export const GATEWAY_AUDIENCE='zang-studio-projects';
-export type GatewayClaims={aud:string;exp:number;iat:number;owner:string;action:'list'|'save'|'delete'|'import';resource?:'projects'|'leads'|'clients'|'folders'|'driveAuth'|'budgets';project?:unknown;revision?:number;id?:string};
+export type GatewayClaims={aud:string;exp:number;iat:number;owner:string;action:'list'|'save'|'delete'|'import';resource?:'projects'|'leads'|'clients'|'folders'|'driveAuth'|'budgets';project?:unknown;revision?:number;id?:string;budgetKey?:string};
 function encode(bytes:Uint8Array){return btoa(Array.from({length:Math.ceil(bytes.length/8192)},(_,i)=>String.fromCharCode(...bytes.subarray(i*8192,(i+1)*8192))).join('')).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');}
 function decode(value:string){const str=atob(value.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(str,c=>c.charCodeAt(0));}
 export async function signGatewayRequest(privateJwk:JsonWebKey,input:Omit<GatewayClaims,'aud'|'exp'|'iat'>){

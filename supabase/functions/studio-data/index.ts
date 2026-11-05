@@ -3,6 +3,7 @@ import {DriveAuthSchema} from '../../../lib/drive-auth-schema.ts';
 import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
 import {LeadSchema} from '../../../lib/leads.ts';
 import {BudgetSchema,createBudget} from '../../../lib/budget.ts';
+import {BudgetLinkSchema} from '../../../lib/budget-sharing.ts';
 import {ClientSchema} from '../../../lib/clients.ts';
 import {ProjectSchema,applyDeliveryTransition,driveNamePendingAfterSave,driveClientPendingAfterSave,type Project} from '../../../lib/projects.ts';
 import publicKey from './public-key.json' with {type:'json'};
@@ -29,21 +30,29 @@ Deno.serve(async(req:Request)=>{
       if(!r.ok)throw new Error('Client save failed');const inserted=await r.json();if(inserted.length)return {...inserted[0].data,revision:inserted[0].revision};
       const find=base();find.set('name_key','eq.'+name.trim().toLowerCase());const rows=await getRows('studio_clients',find);if(!rows.length)throw new Error('Client lookup failed');return {...rows[0].data,revision:rows[0].revision};
     }
+    if(resource==='budgets'){
+      const link=claims.action==='import'?BudgetLinkSchema.safeParse(claims.project):null;
+      const parsed=claims.action==='save'?BudgetSchema.safeParse(claims.project):null;
+      const id=claims.action==='list'?claims.id:link?.success?link.data.id:parsed?.success?parsed.data.id:undefined;
+      if(!id||id.length>80)return reply({error:'Invalid budget request'},400);
+      if(!['list','save','import'].includes(claims.action))return reply({error:'Invalid budget operation'},400);
+      const q=base();q.set('id','eq.'+id);const projects=await getRows('studio_projects',q);
+      if(!projects.length)return reply({error:'Project not found'},404);
+      let seed=claims.action==='list'?createBudget(projects[0].data):parsed?.success?parsed.data:null;
+      if(link?.success&&link.data.action==='link'){
+        const target=base();target.set('id','eq.'+link.data.targetId);const rows=await getRows('studio_projects',target);
+        if(!rows.length)return reply({error:'Project not found'},404);seed=createBudget(rows[0].data);
+      }
+      if(claims.action==='save'&&(!Number.isInteger(claims.revision)||claims.revision!<1))return reply({error:'Invalid revision'},400);
+      const r=await fetch(root+'rpc/studio_budget_operation',{method:'POST',headers,body:JSON.stringify({p_owner:claims.owner,p_id:id,p_action:link?.success?link.data.action:claims.action==='list'?'read':'save',p_data:seed,p_revision:link?.success?link.data.revision:claims.revision??null,p_key:link?.success?link.data.budgetKey:claims.budgetKey??null,p_target:link?.success?link.data.targetId??null:null})});
+      if(!r.ok)throw new Error('Budget operation failed');const result=await r.json();
+      if(result.error)return reply({error:result.error},result.status||400);
+      return reply(claims.action==='list'?[result.budget]:result.budget);
+    }
     if(claims.action==='list'){
       const records=[];
-      if(resource==='budgets'&&(typeof claims.id!=='string'||!claims.id||claims.id.length>80))return reply({error:'Project ID required'},400);
-      for(let offset=0;;offset+=500){const q=base();if(resource==='budgets')q.set('id','eq.'+claims.id);q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
+      for(let offset=0;;offset+=500){const q=base();q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
       return reply(records);
-    }
-    if(resource==='budgets'){
-      const parsed=BudgetSchema.safeParse(claims.project),revision=claims.revision;
-      if(claims.action!=='save'||!parsed.success||!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid budget'},400);
-      const p=parsed.data,q=base();q.set('id','eq.'+p.id);
-      if(!(await getRows('studio_projects',q)).length)return reply({error:'Project not found'},404);
-      if(revision===0){const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:p.id,data:p,revision:1})});return r.ok?reply({...p,revision:1}):reply({error:'Budget already exists'},r.status===409?409:502);}
-      q.set('revision','eq.'+revision);
-      const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data:p,revision:revision!+1})});if(!r.ok)throw new Error('Budget save failed');
-      return (await r.json()).length?reply({...p,revision:revision!+1}):reply({error:'This budget changed in another tab. Download your changes before reloading.'},409);
     }
     if(resource==='driveAuth'){
       const q=base();q.set('id','eq.connection');

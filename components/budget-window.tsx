@@ -7,13 +7,15 @@ import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange}
 import {moveBudgetRow,type BudgetMove} from '@/lib/budget-order';
 import {useBudgetDrag} from './budget-drag';
 import './budget.css';
-type SavedBudget=Budget&{revision:number};
+import BudgetSharing from './budget-sharing';
+import {sameBudgetVersion,type SavedBudget} from '@/lib/budget-sharing';
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const units=[['song','per song'],['hour','per hour'],['day','per day'],['session','per session'],['tuning','per tuning']] as const;
 const numberValue=(value:string,max:number)=>value===''?null:Math.min(max,Math.max(0,Number(value)||0));
 export default function BudgetWindow({project,importFile,onClose}:{project:{id:string;client:string;name:string};importFile:File|null;onClose:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null),input=useRef<HTMLInputElement>(null);
  const [model,setModel]=useState<BudgetModel|null>(null),[status,setStatus]=useState('Opening budget…'),[error,setError]=useState(''),[working,setWorking]=useState(false),[canUndo,setCanUndo]=useState(false);
+ const [budgetInfo,setBudgetInfo]=useState<SavedBudget|null>(null);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const record=useRef<SavedBudget|null>(null),modelRef=useRef<BudgetModel|null>(null),pending=useRef<BudgetModel|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null),saving=useRef<Promise<boolean>|null>(null),imported=useRef(false),mounted=useRef(true);
  const history=useRef(emptyBudgetHistory());
@@ -27,7 +29,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
     try{
      const snapshot={...writeBudgetModel(record.current,BudgetModelSchema.parse(next)),revision:record.current.revision};
      const checked=BudgetSchema.safeParse(snapshot);if(!checked.success)throw new Error(checked.error.issues[0].message);
-     const r=await fetch('/api/budget',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});
+     const r=await fetch('/api/budget',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...checked.data,revision:snapshot.revision,budgetKey:snapshot.budgetKey})});
      const data=await r.json() as SavedBudget&{error?:string};if(!r.ok)throw new Error(data.error||'Could not save. Retry when connected.');
      record.current={...snapshot,revision:data.revision};if(pending.current===next)pending.current=null;
     }catch(e){setStatus('Not saved');setError((e as Error).message);return false}
@@ -63,17 +65,40 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
   const online=()=>void flush();const dismiss=(e:PointerEvent)=>{dialog.current?.querySelectorAll<HTMLDetailsElement>('.budget-category-options[open]').forEach(menu=>{if(!menu.contains(e.target as Node))menu.open=false})};document.addEventListener('pointerdown',dismiss);window.addEventListener('beforeunload',warn);window.addEventListener('online',online);
   return()=>{mounted.current=false;if(timer.current)clearTimeout(timer.current);document.body.style.overflow=overflow;document.removeEventListener('pointerdown',dismiss);window.removeEventListener('beforeunload',warn);window.removeEventListener('online',online)};
  },[flush]);
+ const acceptBudget=useCallback((data:SavedBudget)=>{const next=readBudgetModel(data);record.current=data;modelRef.current=next;pending.current=null;setModel(next);setBudgetInfo(data);history.current=emptyBudgetHistory();setCanUndo(false);setCollapsed({});setStatus('Saved')},[]);
  const load=useCallback(async()=>{
   setError('');setStatus('Opening budget…');
   try{
    const r=await fetch('/api/budget?id='+encodeURIComponent(project.id));const data=await r.json() as SavedBudget&{error?:string};if(!r.ok)throw new Error(data.error||'Could not open the budget.');
-   if(!mounted.current)return;const next=readBudgetModel(data);record.current=data;modelRef.current=next;pending.current=null;setModel(next);history.current=emptyBudgetHistory();setCanUndo(false);setStatus('Saved');
+   if(!mounted.current)return;acceptBudget(data);
    if(importFile&&!imported.current){imported.current=true;await replace(importFile)}
   }catch(e){setStatus('Not loaded');setError((e as Error).message)}
- },[project.id,importFile,replace]);
+ },[project.id,importFile,replace,acceptBudget]);
  useEffect(()=>{void load()},[load]);
+ async function changeSharing(action:'link'|'unlink',targetId?:string):Promise<boolean>{
+  if(working)return false;drag.cancel();setWorking(true);setError('');
+  try{
+   if(!await flush()||!record.current)return false;
+   const current=record.current;
+   const r=await fetch('/api/budget',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:project.id,action,targetId,revision:current.revision,budgetKey:current.budgetKey})});
+   const data=await r.json() as SavedBudget&{error?:string};if(!r.ok)throw new Error(data.error||'Could not change budget links.');acceptBudget(data);return true;
+  }catch(e){setError((e as Error).message);return false}finally{setWorking(false)}
+ }
+ // Quietly refresh clean budgets when another linked project or tab saves.
+ useEffect(()=>{
+  let active=true;
+  const refresh=async()=>{if(working||!record.current||pending.current||saving.current||document.visibilityState==='hidden')return;const before=record.current;
+   try{const r=await fetch('/api/budget?id='+encodeURIComponent(project.id));if(!r.ok)return;const next=await r.json() as SavedBudget;
+    if(!active||pending.current||saving.current||record.current!==before)return;
+    if(!sameBudgetVersion(before,next))acceptBudget(next);else{record.current=next;setBudgetInfo(next)}
+   }catch{/* Keep the current budget available while offline. */}
+  };
+  const interval=setInterval(()=>void refresh(),15000);window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+  return()=>{active=false;clearInterval(interval);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh)};
+ },[project.id,working,acceptBudget]);
+
  async function close(){if(working)return;drag.cancel();setWorking(true);try{if(await flush()){dialog.current?.close();onClose()}}finally{if(mounted.current)setWorking(false)}}
- async function download(){if(!modelRef.current)return;setError('');try{const {exportBudgetExcel}=await import('@/lib/budget-excel');const blob=await exportBudgetExcel(modelRef.current,project),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${project.client} - ${project.name} - Budget.xlsx`.replace(/[\\/:*?"<>|]/g,'-');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{setError('Could not export this budget. Please retry.')}}
+ async function download(){if(!modelRef.current)return;setError('');try{const {exportBudgetExcel}=await import('@/lib/budget-excel');const blob=await exportBudgetExcel(modelRef.current,record.current?.budgetKey?.startsWith('shared:')?{client:'Shared budget',name:(record.current.linkedProjects||[]).map(p=>p.client+' — '+p.name).join(' / ')}:project),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${project.client} - ${project.name} - Budget.xlsx`.replace(/[\\/:*?"<>|]/g,'-');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{setError('Could not export this budget. Please retry.')}}
  function updateRow(sectionId:string,rowId:string,patch:Partial<BudgetLine>){if(!model)return;changed({...model,sections:model.sections.map(section=>section.id!==sectionId?section:{...section,rows:section.rows.map(row=>{if(row.id!==rowId)return row;const next={...row,...patch};if(next.unit==='tuning'&&!isPianoTuning(next.name))next.unit='hour';return next})})},sectionId+':'+rowId+':'+Object.keys(patch).join(','))}
  function renameCategory(sectionId:string,categoryId:string,name:string){
   if(!model)return;const section=model.sections.find(s=>s.id===sectionId),category=section&&groupBudgetRows(section.rows).find(c=>c.id===categoryId);if(!category)return;
@@ -114,6 +139,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
   <div className="budget-toolbar"><div><div className="budget-eyebrow">PROJECT BUDGET</div><h2 id="budget-title">{project.client} <span>— {project.name}</span></h2><small role="status">{status}</small></div><div className="budget-actions"><input ref={input} type="file" accept=".xlsx" hidden onChange={e=>{if(e.target.files?.[0])void replace(e.target.files[0])}}/><button className="secondary" aria-label="Import .xlsx" disabled={!model||working} onClick={()=>input.current?.click()}><Upload size={16}/><span>Import .xlsx</span></button><button className="secondary" aria-label="Download .xlsx" disabled={!model||working} onClick={()=>void download()}><Download size={16}/><span>Download .xlsx</span></button><button className="budget-close" aria-label="Close budget" disabled={working} onClick={()=>void close()}><X size={22}/></button></div></div>
   {error&&<div className="budget-error" role="alert">{error}<button onClick={()=>void(model?flush():load())}><RotateCcw size={14}/> Retry</button>{model&&<button onClick={()=>{if(confirm('Discard unsaved budget changes and reload the saved budget?'))void load()}}>Reload saved budget</button>}</div>}
   <div className="budget-scroll">{!model?<div className="budget-placeholder">{status}</div>:<>
+   {budgetInfo&&<BudgetSharing budget={budgetInfo} busy={working} onChange={changeSharing}/>}
    <div className="budget-body-title">{canUndo&&<button className="budget-text-button" disabled={working} title="Undo (Command+Z)" onClick={undoBudget}><RotateCcw size={14}/> Undo</button>}<div className="budget-summary"><label className="budget-estimate"><span>AGREED ESTIMATE</span><div><span aria-hidden="true">$</span><input aria-label="Agreed project estimate" type="number" inputMode="decimal" min={0} max={1e12} step="any" placeholder="0.00" disabled={working} value={model.estimate??''} onChange={e=>changed({...model,estimate:numberValue(e.target.value,1e12)},'estimate')}/></div></label><span className="budget-total-caption">PROJECT TOTAL <strong>{money.format(budgetTotal(model))}</strong></span><span className={'budget-total-caption budget-remaining'+((budgetRemaining(model)??0)<0?' is-over-budget':'')}><span>{(budgetRemaining(model)??0)<0?'OVER BUDGET':'REMAINING'}</span><output aria-label="Remaining project budget">{budgetRemaining(model)===null?'—':money.format(Math.abs(budgetRemaining(model)!))}</output></span></div></div>
    <fieldset className="budget-fields" disabled={working}><div className="budget-layout"><div className="budget-expenses">
     {model.sections.map(section=><div className="budget-section" key={section.id}>
