@@ -5,7 +5,8 @@ import {signGatewayRequest,verifyGatewayRequest} from '../lib/gateway-auth.ts';
 test('budget preserves supplied fields, numeric rates, empty quantities and dependent formulas',()=>{
  const a=createBudget({id:'test',client:'Artist',name:'Record'}),b=createBudget({id:'other',client:'B',name:'EP'});const cells=a.sheets[0].data as Record<string,unknown>[][];
  assert.equal(cells[0][0].v,'Artist - Record');
- for(const [row,rate] of [[4,80],[7,200],[12,80],[13,100],[14,50],[15,75],[16,50],[17,25],[23,80],[24,80],[25,80],[26,100]])assert.equal(cells[row-1][4].v,rate);
+ assert.deepEqual(cells.slice(3,8).map(row=>row[0].v),['Producer/Engineer','Recording Studio Rental','Studio Musicians','Equipment Rental','Piano Tuning']);
+ for(const [row,rate] of [[4,80],[8,200],[12,80],[13,100],[14,50],[15,75],[16,50],[17,25],[23,80],[24,80],[25,80],[26,100]])assert.equal(cells[row-1][4].v,rate);
  for(const row of [4,5,6,7,8,12,13,14,15,16,17,18,23,24,25,26]){assert.equal(cells[row-1][5].v,'');assert.equal(cells[row-1][6].f,`=E${row}*F${row}`)}
  assert.equal(cells[8][6].f,'=SUM(G4:G8)');assert.equal(cells[28][6].f,'=SUM(G9,G19,G27)');assert.equal((a.sheets[0].calcChain as unknown[]).length,20);
  cells[3][4].v=123;assert.equal((b.sheets[0].data as Record<string,unknown>[][])[3][4].v,80);assert.ok(BudgetSchema.safeParse(a).success);
