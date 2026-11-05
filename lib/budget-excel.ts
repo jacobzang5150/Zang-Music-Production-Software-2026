@@ -10,7 +10,7 @@ export async function exportBudgetExcel(model:BudgetModel,project:{client:string
  function cell(r:number,c:number,value:ExcelJS.CellValue){const dest=sheet.getCell(r,c);dest.value=value;dest.font={name:'DM Sans',size:11,color:{argb:'FFEEE5ED'}};dest.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF19171B'}};dest.alignment={vertical:'middle',wrapText:true};return dest}
  function band(r:number,color:string){for(let c=1;c<=7;c++)cell(r,c,'').fill={type:'pattern',pattern:'solid',fgColor:{argb:color}};sheet.getRow(r).height=28}
  sheet.mergeCells('A1:G1');cell(1,1,`${project.client} - ${project.name}`).font={name:'Space Grotesk',size:18,bold:true,color:{argb:'FFEEE5ED'}};
- sheet.mergeCells('H1:M1');cell(1,8,'Budget Breakdown').font={name:'Space Grotesk',size:16,bold:true,color:{argb:'FFF38FA9'}};sheet.getRow(1).height=36;
+ sheet.mergeCells('H1:K1');cell(1,8,'Agreed estimate');sheet.mergeCells('L1:M1');cell(1,12,model.estimate).numFmt='$#,##0.00';sheet.getRow(1).height=36;
  let row=3;const subtotalCells:string[]=[];
  model.sections.forEach(section=>{
   band(row,'FF48202D');sheet.mergeCells(row,1,row,4);cell(row,1,section.name);for(const [c,label]of [[5,'Rate'],[6,'Quantity'],[7,'Total']] as const)cell(row,c,label);
@@ -27,6 +27,7 @@ export async function exportBudgetExcel(model:BudgetModel,project:{client:string
  });
  band(row,'FF842C43');sheet.mergeCells(row,1,row,4);cell(row,1,'Total');cell(row,7,{formula:`SUM(${subtotalCells.join(',')})`,result:budgetTotal(model)}).numFmt='$#,##0.00';
  for(const c of [1,7]){sheet.getCell(row,c).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF842C43'}};sheet.getCell(row,c).font={name:'Space Grotesk',size:14,bold:true,color:{argb:'FFFFFFFF'}}}
+ sheet.mergeCells('H2:K2');cell(2,8,'Remaining budget');sheet.mergeCells('L2:M2');cell(2,12,model.estimate===null?null:{formula:`L1-G${row}`,result:Math.round((model.estimate-budgetTotal(model))*100)/100}).numFmt='$#,##0.00';
  if(model.notes){row+=2;sheet.mergeCells(row,1,row,7);cell(row,1,'Notes');row++;sheet.mergeCells(row,1,row+2,7);cell(row,1,model.notes);sheet.getRow(row).height=55}
  sheet.mergeCells('H3:K3');cell(3,8,'Dates:');sheet.mergeCells('L3:M3');cell(3,12,'Hours');
  model.sessions.forEach((session,i)=>{const r=i+4;sheet.mergeCells(r,8,r,11);sheet.mergeCells(r,12,r,13);cell(r,8,session.date);cell(r,12,session.hours).numFmt='0.##'});
@@ -51,3 +52,4 @@ export async function importBudgetExcel(file:File):Promise<BudgetModel>{
  if(!sheets.length||sheets.length>20)throw new Error('Choose a budget with 1–20 visible worksheets.');
  return BudgetModelSchema.parse(readBudgetModel({id:'import',templateTitle:false,sheets} as Budget));
 }
+
