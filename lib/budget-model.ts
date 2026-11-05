@@ -16,7 +16,7 @@ export function budgetTotal(model:BudgetModel){return model.sections.reduce((c,s
 export function budgetRemaining(model:BudgetModel){return model.estimate===null?null:Math.round((model.estimate-budgetTotal(model))*100)/100}
 export function groupBudgetRows(rows:BudgetLine[]){
  const parents=new Map(rows.filter(row=>row.dropdown===true&&!row.parentId).map(row=>[row.id,row]));
- return rows.filter(row=>!row.parentId||!parents.has(row.parentId)).map(row=>({id:row.id,name:row.name,dropdown:row.dropdown===true,rows:[row,...(parents.has(row.id)?rows.filter(child=>child.parentId===row.id&&child.id!==row.id):[])]}));
+ return rows.filter(row=>!row.parentId||!parents.has(row.parentId)).map(row=>({id:row.id,name:row.name,dropdown:row.dropdown===true,rows:parents.has(row.id)?rows.filter(item=>item.id===row.id||item.parentId===row.id):[row]}));
 }
 export function setBudgetDropdown(rows:BudgetLine[],rowId:string,enabled:boolean):BudgetLine[]{
  return rows.map(row=>{
