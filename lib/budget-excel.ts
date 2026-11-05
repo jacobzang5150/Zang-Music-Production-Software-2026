@@ -10,7 +10,7 @@ export async function exportBudgetExcel(model:BudgetModel,project:{client:string
  function cell(r:number,c:number,value:ExcelJS.CellValue){const dest=sheet.getCell(r,c);dest.value=value;dest.font={name:'DM Sans',size:11,color:{argb:'FFEEE5ED'}};dest.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF19171B'}};dest.alignment={vertical:'middle',wrapText:true};return dest}
  function band(r:number,color:string){for(let c=1;c<=7;c++)cell(r,c,'').fill={type:'pattern',pattern:'solid',fgColor:{argb:color}};sheet.getRow(r).height=28}
  sheet.mergeCells('A1:G1');cell(1,1,`${project.client} - ${project.name}`).font={name:'Space Grotesk',size:18,bold:true,color:{argb:'FFEEE5ED'}};
- sheet.mergeCells('H1:K1');cell(1,8,'Agreed estimate');sheet.mergeCells('L1:M1');cell(1,12,model.estimate).numFmt='$#,##0.00';sheet.getRow(1).height=36;
+ sheet.mergeCells('H1:K1');cell(1,8,'Estimate');sheet.mergeCells('L1:M1');cell(1,12,model.estimate).numFmt='$#,##0.00';sheet.getRow(1).height=36;
  let row=3;const subtotalCells:string[]=[];
  model.sections.forEach(section=>{
   band(row,'FF48202D');sheet.mergeCells(row,1,row,4);cell(row,1,section.name);for(const [c,label]of [[5,'Rate'],[6,'Quantity'],[7,'Total']] as const)cell(row,c,label);

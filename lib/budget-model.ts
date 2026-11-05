@@ -58,7 +58,7 @@ export function readBudgetModel(budget:Budget):BudgetModel{
    if(!row)return;
    const label=[text(row[0]),text(row[1])].filter(Boolean).join(' '),details=[text(row[2]),text(row[3])].filter(Boolean).join(' '),rate=numeric(row[4]),quantity=numeric(row[5]);
    const date=text(row[7]),hours=numeric(row[11]);
-   if(/^agreed estimate$/i.test(date)){estimate=hours;return}
+   if(/^(agreed )?estimate$/i.test(date)){estimate=hours;return}
    if(/^(remaining budget|over budget)$/i.test(date))return;
    if(r>=3&&((date&&!/^(dates?:|budget breakdown)$/i.test(date))||hours!==null))sessions.push({id:`sheet-${sheetIndex}-session-${r}`,date,hours});
    if(/^rate$/i.test(text(row[4]))&&/^total$/i.test(text(row[6]))){section={id:`sheet-${sheetIndex}-section-${r}`,name:(budget.sheets.length>1?`${sheet.name||'Budget'} · `:'')+(label||'Expenses'),rows:[]};sections.push(section);previous='';return;}
