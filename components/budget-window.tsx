@@ -27,7 +27,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
    while(pending.current&&record.current){
     const next=pending.current;setStatus('Saving…');setError('');
     try{
-     const snapshot={...writeBudgetModel(record.current,BudgetModelSchema.parse(next)),revision:record.current.revision};
+     const snapshot={...writeBudgetModel(record.current,BudgetModelSchema.parse(next)),revision:record.current.revision,budgetKey:record.current.budgetKey};
      const checked=BudgetSchema.safeParse(snapshot);if(!checked.success)throw new Error(checked.error.issues[0].message);
      const r=await fetch('/api/budget',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...checked.data,revision:snapshot.revision,budgetKey:snapshot.budgetKey})});
      const data=await r.json() as SavedBudget&{error?:string};if(!r.ok)throw new Error(data.error||'Could not save. Retry when connected.');
