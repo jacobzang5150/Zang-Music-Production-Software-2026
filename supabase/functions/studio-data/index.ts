@@ -2,6 +2,7 @@ import {verifyGatewayRequest} from '../../../lib/gateway-auth.ts';
 import {DriveAuthSchema} from '../../../lib/drive-auth-schema.ts';
 import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
 import {LeadSchema} from '../../../lib/leads.ts';
+import {BudgetSchema,createBudget} from '../../../lib/budget.ts';
 import {ClientSchema} from '../../../lib/clients.ts';
 import {ProjectSchema,applyDeliveryTransition,driveNamePendingAfterSave,driveClientPendingAfterSave,type Project} from '../../../lib/projects.ts';
 import publicKey from './public-key.json' with {type:'json'};
@@ -18,7 +19,7 @@ Deno.serve(async(req:Request)=>{
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
     const root=Deno.env.get('SUPABASE_URL')+'/rest/v1/';
     const resource=claims.resource||'projects';
-    const table=resource==='driveAuth'?'studio_drive_auth':resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
+    const table=resource==='budgets'?'studio_budgets':resource==='driveAuth'?'studio_drive_auth':resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
     const base=()=>new URLSearchParams({owner:'eq.'+claims.owner});
     async function getRows(tableName:string,query:URLSearchParams){const r=await fetch(root+tableName+'?'+query,{headers});if(!r.ok)throw new Error('Database read failed');return await r.json();}
     async function ensureClient(name:string,clientId?:string){
@@ -30,8 +31,19 @@ Deno.serve(async(req:Request)=>{
     }
     if(claims.action==='list'){
       const records=[];
-      for(let offset=0;;offset+=500){const q=base();q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
+      if(resource==='budgets'&&(typeof claims.id!=='string'||!claims.id||claims.id.length>80))return reply({error:'Project ID required'},400);
+      for(let offset=0;;offset+=500){const q=base();if(resource==='budgets')q.set('id','eq.'+claims.id);q.set('order','id.asc');q.set('limit','500');q.set('offset',String(offset));const rows=await getRows(table,q);records.push(...rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));if(rows.length<500)break;}
       return reply(records);
+    }
+    if(resource==='budgets'){
+      const parsed=BudgetSchema.safeParse(claims.project),revision=claims.revision;
+      if(claims.action!=='save'||!parsed.success||!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid budget'},400);
+      const p=parsed.data,q=base();q.set('id','eq.'+p.id);
+      if(!(await getRows('studio_projects',q)).length)return reply({error:'Project not found'},404);
+      if(revision===0){const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:p.id,data:p,revision:1})});return r.ok?reply({...p,revision:1}):reply({error:'Budget already exists'},r.status===409?409:502);}
+      q.set('revision','eq.'+revision);
+      const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data:p,revision:revision!+1})});if(!r.ok)throw new Error('Budget save failed');
+      return (await r.json()).length?reply({...p,revision:revision!+1}):reply({error:'This budget changed in another tab. Download your changes before reloading.'},409);
     }
     if(resource==='driveAuth'){
       const q=base();q.set('id','eq.connection');
@@ -98,6 +110,10 @@ Deno.serve(async(req:Request)=>{
         if(claims.action==='import'){if(revision!<1)return reply({error:'Invalid revision'},400);q.set('on_conflict','owner,id');}
         const r=await fetch(root+table+'?'+q,{method:'POST',headers:claims.action==='import'?{...headers,Prefer:'resolution=ignore-duplicates,return=representation'}:headers,body:JSON.stringify({owner:claims.owner,id:p.id,data:p,revision:claims.action==='import'?revision:1})});
         if(!r.ok)return reply({error:r.status===409?'Record already exists. Reload before editing.':'Unable to save record'},r.status===409?409:502);
+        if(resource==='projects'){
+          // Initialization is idempotent; opening a legacy project also creates its budget.
+          await fetch(root+'studio_budgets?on_conflict=owner,id',{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({owner:claims.owner,id:p.id,data:createBudget(p as Project),revision:1})});
+        }
         return reply({...p,revision:claims.action==='import'?revision:1});
       }
       const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data:p,revision:revision!+1})});if(!r.ok)throw new Error('Database update failed');const rows=await r.json();
@@ -111,3 +127,4 @@ Deno.serve(async(req:Request)=>{
     return reply({error:'Invalid action'},400);
   }catch{return reply({error:'Database unavailable. Please try again.'},502)}
 });
+

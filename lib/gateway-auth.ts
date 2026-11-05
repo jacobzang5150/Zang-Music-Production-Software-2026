@@ -1,6 +1,6 @@
 export const GATEWAY_AUDIENCE='zang-studio-projects';
-export type GatewayClaims={aud:string;exp:number;iat:number;owner:string;action:'list'|'save'|'delete'|'import';resource?:'projects'|'leads'|'clients'|'folders'|'driveAuth';project?:unknown;revision?:number;id?:string};
-function encode(bytes:Uint8Array){return btoa(String.fromCharCode(...bytes)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');}
+export type GatewayClaims={aud:string;exp:number;iat:number;owner:string;action:'list'|'save'|'delete'|'import';resource?:'projects'|'leads'|'clients'|'folders'|'driveAuth'|'budgets';project?:unknown;revision?:number;id?:string};
+function encode(bytes:Uint8Array){return btoa(Array.from({length:Math.ceil(bytes.length/8192)},(_,i)=>String.fromCharCode(...bytes.subarray(i*8192,(i+1)*8192))).join('')).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');}
 function decode(value:string){const str=atob(value.replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(str,c=>c.charCodeAt(0));}
 export async function signGatewayRequest(privateJwk:JsonWebKey,input:Omit<GatewayClaims,'aud'|'exp'|'iat'>){
   const now=Math.floor(Date.now()/1000);
@@ -12,12 +12,13 @@ export async function signGatewayRequest(privateJwk:JsonWebKey,input:Omit<Gatewa
   return unsigned+'.'+encode(new Uint8Array(signature));
 }
 export async function verifyGatewayRequest(publicJwk:JsonWebKey,token:string):Promise<GatewayClaims>{
-  const parts=token.split('.');if(parts.length!==3||token.length>500000)throw new Error('Invalid token');
+  const parts=token.split('.');if(parts.length!==3||token.length>3000000)throw new Error('Invalid token');
   const decoder=new TextDecoder();const header=JSON.parse(decoder.decode(decode(parts[0])));
   if(header.alg!=='RS256')throw new Error('Invalid algorithm');
   const key=await crypto.subtle.importKey('jwk',publicJwk,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
   if(!await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,decode(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1])))throw new Error('Invalid signature');
   const claims=JSON.parse(decoder.decode(decode(parts[1]))) as GatewayClaims;const now=Math.floor(Date.now()/1000);
-  if((claims.resource!==undefined&&!['projects','leads','clients','folders','driveAuth'].includes(claims.resource))||claims.aud!==GATEWAY_AUDIENCE||!Number.isInteger(claims.exp)||!Number.isInteger(claims.iat)||claims.exp<=now||claims.iat>now+10||claims.exp-claims.iat>60||!claims.owner||typeof claims.owner!=='string'||claims.owner.length>200||!['list','save','delete','import'].includes(claims.action))throw new Error('Invalid claims');
+  if((claims.resource!==undefined&&!['projects','leads','clients','folders','driveAuth','budgets'].includes(claims.resource))||claims.aud!==GATEWAY_AUDIENCE||!Number.isInteger(claims.exp)||!Number.isInteger(claims.iat)||claims.exp<=now||claims.iat>now+10||claims.exp-claims.iat>60||!claims.owner||typeof claims.owner!=='string'||claims.owner.length>200||!['list','save','delete','import'].includes(claims.action))throw new Error('Invalid claims');
   return claims;
 }
+
