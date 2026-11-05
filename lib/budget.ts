@@ -25,8 +25,8 @@ export function createBudget(project:{id:string;client:string;name:string}):Budg
   const sub=end+1;put(sub,1,'Sub Total',{bl:1});merged(sub,1,1,4);put(sub,7,0,{...money,f:`=SUM(G${start}:G${end})`,bl:1,bg:'#30212b'});
  }
  const rows:[number,string,string,number|null,string][]=[
-  [4,'Producer/Engineer','Jacob Zang',80,'hr'],[5,'Recording Studio Rental','',null,''],[6,'Equipment Rental','',0,''],[7,'Piano Tuning','',200,'tuning'],[8,'Studio Musicians','',null,''],
-  [12,'Producer/Engineer','Jacob Zang',80,'hr'],[13,'Home Overdubs','Electric Guitar',100,'song'],[14,'','Acoustic Guitar',50,'song'],[15,'','Keys',75,'song'],[16,'','Bass',50,'song'],[17,'','Percussion',25,''],[18,'Studio Musicians','',null,''],
+  [4,'Producer/Engineer','Jacob Zang',80,'hr'],[5,'Recording Studio Rental','',null,''],[6,'Equipment Rental','',0,''],[7,'Piano Tuning','',200,'tuning'],[8,'Studio Musicians','',null,'song'],
+  [12,'Producer/Engineer','Jacob Zang',80,'hr'],[13,'Home Overdubs','Electric Guitar',100,'song'],[14,'','Acoustic Guitar',50,'song'],[15,'','Keys',75,'song'],[16,'','Bass',50,'song'],[17,'','Percussion',25,''],[18,'Studio Musicians','',null,'song'],
   [23,'Editing','',80,'hr'],[24,'Melodyne','',80,'hr'],[25,'Mixing','',80,'hr'],[26,'Mastering','',100,'song']
  ];
  for(const [r,label,person,rate,unit] of rows){put(r,1,label);put(r,3,person);if(rate!==null)put(r,5,rate,{m:`$${rate.toFixed(2)}${unit?'/'+unit:''}`,ct:{fa:unit?`$0.00"/${unit}"`:'$#,##0.00',t:'n'}});}

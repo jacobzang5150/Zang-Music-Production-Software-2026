@@ -47,3 +47,11 @@ test('dropdown selection persists and disabling it preserves every item and cost
  model.sections[0].rows=flat;assert.equal(budgetTotal(model),originalTotal);
  const orphan=setBudgetDropdown([child],child.id,true);assert.equal(orphan[0].parentId,undefined);assert.equal(groupBudgetRows(orphan)[0].dropdown,true);
 });
+
+test('Studio Musicians defaults to per song while saved unit choices remain editable',()=>{
+ const budget=createBudget(project),model=readBudgetModel(budget);
+ const musicians=model.sections.flatMap(section=>section.rows).filter(row=>row.name==='Studio Musicians');
+ assert.equal(musicians.length,2);assert.ok(musicians.every(row=>row.unit==='song'));
+ musicians[0].unit='day';const saved=readBudgetModel(writeBudgetModel(budget,model));
+ assert.equal(saved.sections[0].rows.find(row=>row.name==='Studio Musicians')?.unit,'day');
+});

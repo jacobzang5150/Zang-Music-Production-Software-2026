@@ -45,7 +45,7 @@ export function inferUnit(cell:Cell|null|undefined,name:string,details:string):R
  if(/\/(?:session)\b|per\s+session/i.test(value))return 'session';
  if(/\/(?:hr|hour)\b|per\s+hour/i.test(value))return 'hour';
  if(isPianoTuning(name))return 'tuning';
- return /guitar|keys|bass|percussion|mastering/i.test(name+' '+details)?'song':/equipment/i.test(name)?'session':'hour';
+ return /studio musicians|guitar|keys|bass|percussion|mastering/i.test(name+' '+details)?'song':/equipment/i.test(name)?'session':'hour';
 }
 // Preserve the original workbook alongside the structured budget, including custom inserted rows.
 export function readBudgetModel(budget:Budget):BudgetModel{
