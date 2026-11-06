@@ -10,6 +10,7 @@ import {useBudgetMobile} from './use-budget-mobile';
 import {useBudgetFit} from './use-budget-fit';
 import './budget.css';
 import BudgetSharing from './budget-sharing';
+import {changeBudgetLink} from '@/lib/budget-sharing-client';
 import {sameBudgetVersion,budgetHeading,type SavedBudget} from '@/lib/budget-sharing';
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const units=[['song','per song'],['hour','per hour'],['day','per day'],['session','per session'],['tuning','per tuning']] as const;
@@ -85,8 +86,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
   try{
    if(!await flush()||!record.current)return false;
    const current=record.current;
-   const r=await fetch('/api/budget',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:project.id,action,targetId,revision:current.revision,budgetKey:current.budgetKey})});
-   const data=await r.json() as SavedBudget&{error?:string};if(!r.ok)throw new Error(data.error||'Could not change budget links.');acceptBudget(data);return true;
+   const data=await changeBudgetLink(current,action,targetId);acceptBudget(data);return true;
   }catch(e){setError((e as Error).message);return false}finally{setWorking(false)}
  }
  // Quietly refresh clean budgets when another linked project or tab saves.

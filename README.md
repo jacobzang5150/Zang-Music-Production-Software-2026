@@ -149,3 +149,5 @@ Phones use the same horizontal budget table as desktop: category, details, rate 
 The mobile budget sheet fits its full desktop-width layout into the available viewport by default. The toolbar remains unscaled; native pinch zoom is unrestricted and the fit does not reset while pinching. Row drag previews retain the same effective scale as the sheet. Desktop zoom and layout are unchanged.
 
 The mobile budget no longer shows Expenses, Sessions and Notes shortcut buttons; the fitted budget sheet opens directly below the toolbar.
+
+To extend an already shared budget, open Link Projects, choose an additional project, and select Add project to budget. Repeat to add more projects; the panel stays open. This adds each selected project to the existing group instead of moving the open project out of it. Existing members, expenses and sessions stay in place, and the heading includes every linked project. The selected project's latest revision is checked before changing its membership. Failed reads or conflicting edits leave the current group intact.
