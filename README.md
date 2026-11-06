@@ -143,3 +143,5 @@ Budgets can be linked from **Link Projects** inside a project budget. Select the
 Link Projects appears in the budget toolbar alongside Import and Download. Unlinked budgets have no relationship label; linked budgets show Linked and use the title Client Name - Project 1, Project 2. Excel titles and filenames follow the same naming.
 
 Linked budgets have an Unlink button directly beside Link Projects in the toolbar. It restores that project’s original separate budget; the old explanatory unlink section has been removed.
+
+At viewport widths up to 800px, the budget uses a phone layout with 16px input text, 44px touch controls, stacked rate/unit fields, readable row names, and quick jumps to Expenses, Sessions and Notes. Mobile totals and estimate use a compact summary, and VisualViewport sizing keeps the editor inside the visible area when the keyboard opens. Desktop CSS and table layout are preserved; the mobile navigation is hidden above 800px. Autosave, shared budgets, row dragging and Excel import/export use the same data and logic on both layouts. Verified at 320px and 390px widths plus desktop.

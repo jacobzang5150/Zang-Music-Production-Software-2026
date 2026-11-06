@@ -6,6 +6,7 @@ import {BudgetModelSchema,readBudgetModel,writeBudgetModel,newBudgetLine,isPiano
 import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange} from '@/lib/budget-history';
 import {moveBudgetRow,type BudgetMove} from '@/lib/budget-order';
 import {useBudgetDrag} from './budget-drag';
+import {useBudgetMobile} from './use-budget-mobile';
 import './budget.css';
 import BudgetSharing from './budget-sharing';
 import {sameBudgetVersion,budgetHeading,type SavedBudget} from '@/lib/budget-sharing';
@@ -20,6 +21,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const record=useRef<SavedBudget|null>(null),modelRef=useRef<BudgetModel|null>(null),pending=useRef<BudgetModel|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null),saving=useRef<Promise<boolean>|null>(null),imported=useRef(false),mounted=useRef(true);
  const history=useRef(emptyBudgetHistory());
+ useBudgetMobile(dialog);
  const flush=useCallback(async():Promise<boolean>=>{
   if(timer.current)clearTimeout(timer.current);
   if(saving.current){if(!await saving.current)return false;return flush()}
@@ -139,6 +141,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  const heading=budgetHeading(project,budgetInfo),linked=(budgetInfo?.linkedProjects?.length||0)>1;
  return <dialog ref={dialog} className="budget-dialog" aria-labelledby="budget-title" onCancel={e=>{e.preventDefault();void close()}} onClick={e=>{if(e.target===dialog.current)void close()}}><div className="budget-frame" onDragOver={e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault()}} onDrop={e=>{e.preventDefault();if(!working&&record.current&&e.dataTransfer.files[0])void replace(e.dataTransfer.files[0])}}>
   <div className="budget-toolbar"><div><div className="budget-eyebrow">PROJECT BUDGET</div><h2 id="budget-title">{heading.client} <span>- {heading.name}</span></h2>{linked&&<span className="budget-linked-label"><Link2 size={12}/> Linked</span>}<small role="status">{status}</small></div><div className="budget-actions"><button className="secondary" aria-label="Link Projects" aria-expanded={sharingOpen} aria-controls="budget-sharing-panel" disabled={!model||working} onClick={()=>setSharingOpen(!sharingOpen)}><Link2 size={16}/><span>Link Projects</span></button>{budgetInfo?.budgetKey?.startsWith('shared:')&&<button className="secondary" aria-label="Unlink budget" title="Restore this project's separate budget" disabled={!model||working} onClick={async()=>{if(await changeSharing('unlink'))setSharingOpen(false)}}><Unlink size={16}/><span>Unlink</span></button>}<input ref={input} type="file" accept=".xlsx" hidden onChange={e=>{if(e.target.files?.[0])void replace(e.target.files[0])}}/><button className="secondary" aria-label="Import .xlsx" disabled={!model||working} onClick={()=>input.current?.click()}><Upload size={16}/><span>Import .xlsx</span></button><button className="secondary" aria-label="Download .xlsx" disabled={!model||working} onClick={()=>void download()}><Download size={16}/><span>Download .xlsx</span></button><button className="budget-close" aria-label="Close budget" disabled={working} onClick={()=>void close()}><X size={22}/></button></div></div>
+  {model&&<nav className="budget-mobile-navigation" aria-label="Budget sections">{[['Expenses','.budget-expenses'],['Sessions','.budget-dates'],['Notes','.budget-notes']].map(([label,selector])=><button type="button" key={label} onClick={()=>{const scroller=dialog.current?.querySelector<HTMLElement>('.budget-scroll'),target=dialog.current?.querySelector(selector);if(scroller&&target)scroller.scrollTo({top:Math.max(0,scroller.scrollTop+target.getBoundingClientRect().top-scroller.getBoundingClientRect().top-14),behavior:'instant'})}}>{label}</button>)}</nav>}
   {error&&<div className="budget-error" role="alert">{error}<button onClick={()=>void(model?flush():load())}><RotateCcw size={14}/> Retry</button>{model&&<button onClick={()=>{if(confirm('Discard unsaved budget changes and reload the saved budget?'))void load()}}>Reload saved budget</button>}</div>}
   <div className="budget-scroll">{!model?<div className="budget-placeholder">{status}</div>:<>
    {budgetInfo&&<BudgetSharing budget={budgetInfo} busy={working} open={sharingOpen} onClose={()=>setSharingOpen(false)} onChange={changeSharing}/>}
