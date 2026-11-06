@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useRef,useState,useCallback,type PointerEvent as ReactPointerEvent} from 'react';
-import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight,MoreHorizontal,GripVertical,Link2,Unlink} from 'lucide-react';
+import {Download,Upload,X,RotateCcw,Plus,Trash2,ChevronRight,MoreHorizontal,GripVertical,Link2,Unlink,CalendarDays} from 'lucide-react';
 import {BudgetSchema,type Budget} from '@/lib/budget';
 import {BudgetModelSchema,readBudgetModel,writeBudgetModel,newBudgetLine,isPianoTuning,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,setBudgetDropdown,type BudgetModel,type BudgetLine} from '@/lib/budget-model';
 import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange} from '@/lib/budget-history';
@@ -10,6 +10,8 @@ import {useBudgetMobile} from './use-budget-mobile';
 import {useBudgetFit} from './use-budget-fit';
 import './budget.css';
 import BudgetSharing from './budget-sharing';
+import SessionDatePicker from './session-date-picker';
+import {sessionDateLabel} from '@/lib/session-dates';
 import {changeBudgetLink} from '@/lib/budget-sharing-client';
 import {sameBudgetVersion,budgetHeading,type SavedBudget} from '@/lib/budget-sharing';
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
@@ -18,6 +20,7 @@ const numberValue=(value:string,max:number)=>value===''?null:Math.min(max,Math.m
 export default function BudgetWindow({project,importFile,onClose}:{project:{id:string;client:string;name:string};importFile:File|null;onClose:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null),input=useRef<HTMLInputElement>(null);
  const [model,setModel]=useState<BudgetModel|null>(null),[status,setStatus]=useState('Opening budget…'),[error,setError]=useState(''),[working,setWorking]=useState(false),[canUndo,setCanUndo]=useState(false);
+ const [dateSession,setDateSession]=useState<string|null>(null);
  const [sharingOpen,setSharingOpen]=useState(false);
  const [budgetInfo,setBudgetInfo]=useState<SavedBudget|null>(null);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
@@ -162,9 +165,9 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
     </div>)}
     <button className="budget-text-button budget-add-section" disabled={model.sections.length>=50} onClick={()=>changed({...model,sections:[...model.sections,{id:crypto.randomUUID(),name:'Other expenses',rows:[newBudgetLine()]}]})}><Plus size={16}/> Add section</button>
     <div className="budget-grand-total"><span>Total</span><output aria-label="Project budget total">{money.format(budgetTotal(model))}</output></div>
-   </div><section className="budget-dates" aria-label="Session tracker"><h3 className="budget-dates-title">Sessions</h3><div className="budget-dates-heading"><span>Date</span><span>Details</span><span>Hours</span><span aria-hidden="true"/></div>{model.sessions.map((session,index)=><div className="budget-session" key={session.id}><input aria-label={`Session ${index+1} date`} placeholder="Date" maxLength={200} value={session.date} onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,date:e.target.value}:s)},'session:'+session.id+':date')}/><input aria-label={`Session ${index+1} details`} placeholder="Details" maxLength={1000} value={session.details??''} onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,details:e.target.value}:s)},'session:'+session.id+':details')}/><input aria-label={`Session ${index+1} hours`} type="number" inputMode="decimal" min={0} max={1e6} step="any" value={session.hours??''} placeholder="0" onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,hours:numberValue(e.target.value,1e6)}:s)},'session:'+session.id+':hours')}/><button className="budget-remove" aria-label={`Remove session ${index+1}`} onClick={()=>remove({...model,sessions:model.sessions.filter(s=>s.id!==session.id)})}><X size={14}/></button></div>)}<button className="budget-text-button" disabled={model.sessions.length>=500} onClick={()=>changed({...model,sessions:[...model.sessions,{id:crypto.randomUUID(),date:'',details:'',hours:null}]})}><Plus size={15}/> Add session</button><div className="budget-hours-total"><span>Total hours</span><strong>{model.sessions.reduce((sum,s)=>sum+(s.hours??0),0).toLocaleString('en-US',{maximumFractionDigits:2})}</strong></div></section></div>
+   </div><section className="budget-dates" aria-label="Session tracker"><h3 className="budget-dates-title">Sessions</h3><div className="budget-dates-heading"><span>Date</span><span>Details</span><span>Hours</span><span aria-hidden="true"/></div>{model.sessions.map((session,index)=><div className="budget-session" key={session.id}><button type="button" className="budget-session-date" aria-label={`Choose date for session ${index+1}`} aria-haspopup="dialog" disabled={working} onClick={()=>setDateSession(session.id)}><CalendarDays size={16}/><span>{sessionDateLabel(session.date)}</span></button><input aria-label={`Session ${index+1} details`} placeholder="Details" maxLength={1000} value={session.details??''} onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,details:e.target.value}:s)},'session:'+session.id+':details')}/><input aria-label={`Session ${index+1} hours`} type="number" inputMode="decimal" min={0} max={1e6} step="any" value={session.hours??''} placeholder="0" onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,hours:numberValue(e.target.value,1e6)}:s)},'session:'+session.id+':hours')}/><button className="budget-remove" aria-label={`Remove session ${index+1}`} onClick={()=>remove({...model,sessions:model.sessions.filter(s=>s.id!==session.id)})}><X size={14}/></button></div>)}<button className="budget-text-button" disabled={model.sessions.length>=500} onClick={()=>changed({...model,sessions:[...model.sessions,{id:crypto.randomUUID(),date:'',details:'',hours:null}]})}><Plus size={15}/> Add session</button><div className="budget-hours-total"><span>Total hours</span><strong>{model.sessions.reduce((sum,s)=>sum+(s.hours??0),0).toLocaleString('en-US',{maximumFractionDigits:2})}</strong></div></section></div>
    </fieldset></div></div>
   </>}</div>
- </div></dialog>;
+ </div>{dateSession&&model?.sessions.find(session=>session.id===dateSession)&&<SessionDatePicker value={model.sessions.find(session=>session.id===dateSession)!.date} onClose={()=>setDateSession(null)} onSelect={value=>{changed({...model,sessions:model.sessions.map(session=>session.id===dateSession?{...session,date:value}:session)},'session:'+dateSession+':date');setDateSession(null)}}/>}</dialog>;
 }
 
