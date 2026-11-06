@@ -28,9 +28,11 @@ export async function exportBudgetExcel(model:BudgetModel,project:{client:string
  band(row,'FF842C43');sheet.mergeCells(row,1,row,4);cell(row,1,'Total');cell(row,7,{formula:`SUM(${subtotalCells.join(',')})`,result:budgetTotal(model)}).numFmt='$#,##0.00';
  for(const c of [1,7]){sheet.getCell(row,c).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF842C43'}};sheet.getCell(row,c).font={name:'Space Grotesk',size:14,bold:true,color:{argb:'FFFFFFFF'}}}
  sheet.mergeCells('H2:K2');cell(2,8,'Remaining budget');sheet.mergeCells('L2:M2');cell(2,12,model.estimate===null?null:{formula:`L1-G${row}`,result:Math.round((model.estimate-budgetTotal(model))*100)/100}).numFmt='$#,##0.00';
- if(model.notes){row+=2;sheet.mergeCells(row,1,row,7);cell(row,1,'Notes');row++;sheet.mergeCells(row,1,row+2,7);cell(row,1,model.notes);sheet.getRow(row).height=55}
- sheet.mergeCells('H3:K3');cell(3,8,'Dates:');sheet.mergeCells('L3:M3');cell(3,12,'Hours');
- model.sessions.forEach((session,i)=>{const r=i+4;sheet.mergeCells(r,8,r,11);sheet.mergeCells(r,12,r,13);cell(r,8,session.date);cell(r,12,session.hours).numFmt='0.##'});
+ row+=3;band(row,'FF48202D');sheet.mergeCells(row,1,row,7);cell(row,1,'Sessions');row++;
+ sheet.mergeCells(row,1,row,2);sheet.mergeCells(row,3,row,6);cell(row,1,'Date');cell(row,3,'Details');cell(row,7,'Hours');sheet.getRow(row).height=28;row++;
+ const sessionsStart=row;
+ model.sessions.forEach(session=>{sheet.mergeCells(row,1,row,2);sheet.mergeCells(row,3,row,6);cell(row,1,session.date);cell(row,3,session.details||'');cell(row,7,session.hours).numFmt='0.##';sheet.getRow(row).height=28;row++});
+ sheet.mergeCells(row,1,row,6);cell(row,1,'Total hours');cell(row,7,{formula:model.sessions.length?`SUM(G${sessionsStart}:G${row-1})`:'0',result:model.sessions.reduce((sum,session)=>sum+(session.hours??0),0)}).numFmt='0.##';
  return new Blob([await workbook.xlsx.writeBuffer() as ArrayBuffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 export async function importBudgetExcel(file:File):Promise<BudgetModel>{

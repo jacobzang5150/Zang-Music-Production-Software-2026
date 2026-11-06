@@ -20,9 +20,9 @@ test('totals use numeric rate times quantity, section sums, currency rounding an
  model.sections[0].rows[0].unit='tuning';assert.equal(BudgetModelSchema.safeParse(model).success,false);
 });
 test('Excel export and import preserve editable numeric fields, all units and cached formulas',async()=>{
- const model=readBudgetModel(createBudget(project));model.sections[0].rows[0].quantity=3;model.sections[0].rows[1].unit='day';model.sections[0].rows[1].rate=200;model.sections[0].rows[1].quantity=2;model.sections[0].rows[3].unit='session';model.sections[0].rows[4].unit='day';model.notes='Review estimates';model.sessions=[{id:'s',date:'2026-11-05',hours:3}];
+ const model=readBudgetModel(createBudget(project));model.sections[0].rows[0].quantity=3;model.sections[0].rows[1].unit='day';model.sections[0].rows[1].rate=200;model.sections[0].rows[1].quantity=2;model.sections[0].rows[3].unit='session';model.sections[0].rows[4].unit='day';model.notes='Review estimates';model.sessions=[{id:'s',date:'2026-11-05',details:'Full band tracking',hours:3}];
  model.estimate=2000;const blob=await exportBudgetExcel(model,project),workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await blob.arrayBuffer());const sheet=workbook.worksheets[0];assert.equal(sheet.getCell('E4').value,80);assert.deepEqual(sheet.getCell('G4').value,{formula:'E4*F4',result:240});assert.equal(sheet.getCell('F6').value,null);
- const restored=await importBudgetExcel(new File([blob],'Budget.xlsx'));assert.equal(budgetTotal(restored),budgetTotal(model));assert.equal(restored.sections[0].rows[1].unit,'day');assert.equal(restored.sections[0].rows[3].unit,'session');assert.equal(restored.sections[0].rows[4].unit,'day');assert.equal(restored.sections[1].rows[1].unit,'song');assert.equal(restored.sessions[0].hours,3);assert.equal(restored.notes,'Review estimates');assert.equal(restored.estimate,2000);assert.equal(budgetRemaining(restored),2000-budgetTotal(model));
+ const restored=await importBudgetExcel(new File([blob],'Budget.xlsx'));assert.equal(budgetTotal(restored),budgetTotal(model));assert.equal(restored.sections[0].rows[1].unit,'day');assert.equal(restored.sections[0].rows[3].unit,'session');assert.equal(restored.sections[0].rows[4].unit,'day');assert.equal(restored.sections[1].rows[1].unit,'song');assert.equal(restored.sessions[0].hours,3);assert.equal(restored.sessions[0].details,'Full band tracking');assert.equal(restored.sessions[0].date,'2026-11-05');assert.equal(restored.sessions.length,1);assert.equal(restored.notes,'');assert.equal(restored.estimate,2000);assert.equal(budgetRemaining(restored),2000-budgetTotal(model));
 });
 
 test('estimate defaults to unset for existing budgets and tracks remaining or overspent amounts',()=>{
@@ -54,4 +54,23 @@ test('Studio Musicians defaults to per song while saved unit choices remain edit
  assert.equal(musicians.length,2);assert.ok(musicians.every(row=>row.unit==='song'));
  musicians[0].unit='day';const saved=readBudgetModel(writeBudgetModel(budget,model));
  assert.equal(saved.sections[0].rows.find(row=>row.name==='Studio Musicians')?.unit,'day');
+});
+
+test('legacy date/hour entries and saved legacy notes survive adding session details',()=>{
+ const budget=createBudget(project),data=budget.sheets[0].data as any[][];
+ data[3][7]={v:'November 5 - tracking'};data[3][11]={v:3.5};
+ const model=readBudgetModel(budget);assert.equal(model.sessions.length,1);assert.equal(model.sessions[0].date,'November 5 - tracking');assert.equal(model.sessions[0].hours,3.5);assert.equal(model.sessions[0].details,undefined);
+ model.sessions[0].details='Studio A, full band';model.notes='Legacy saved notes';
+ const restored=readBudgetModel(writeBudgetModel(budget,model));assert.equal(restored.sessions[0].details,'Studio A, full band');assert.equal(restored.notes,'Legacy saved notes');
+ assert.equal(BudgetModelSchema.safeParse({...model,sessions:[{...model.sessions[0],details:'x'.repeat(1001)}]}).success,false);
+});
+test('bottom session tracker exports after totals with Date Details Hours and round trips blank and zero values',async()=>{
+ const model=readBudgetModel(createBudget(project));model.notes='Hidden legacy note';
+ model.sessions=[{id:'a',date:'2026-11-05',details:'Tracking',hours:0},{id:'b',date:'',details:'Piano tuning',hours:null}];
+ const blob=await exportBudgetExcel(model,project),workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await blob.arrayBuffer());const sheet=workbook.worksheets[0];
+ let totalRow=0,sessionRow=0,headerRow=0,notesRows=0;
+ sheet.eachRow((row,r)=>{if(row.getCell(1).value==='Total')totalRow=r;if(row.getCell(1).value==='Sessions')sessionRow=r;if(row.getCell(1).value==='Date'&&row.getCell(3).value==='Details')headerRow=r;if(row.getCell(1).value==='Notes')notesRows++});
+ assert.ok(sessionRow>totalRow);assert.equal(headerRow,sessionRow+1);assert.equal(sheet.getCell(headerRow,7).value,'Hours');assert.equal(notesRows,0);
+ const imported=await importBudgetExcel(new File([blob],'Budget.xlsx'));
+ assert.deepEqual(imported.sessions.map(({date,details,hours})=>({date,details,hours})),model.sessions.map(({date,details,hours})=>({date,details,hours})));assert.equal(imported.sections.length,model.sections.length);assert.equal(budgetTotal(imported),budgetTotal(model));
 });

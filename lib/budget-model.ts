@@ -5,7 +5,7 @@ export const rateUnits=['song','hour','day','session','tuning'] as const;
 export type RateUnit=typeof rateUnits[number];
 export const isPianoTuning=(name:string)=>/piano.*tun|tun.*piano/i.test(name);
 const LineSchema=z.object({id:z.string().min(1).max(100),name:z.string().max(200),details:z.string().max(300),categoryId:z.string().min(1).max(100).optional(),parentId:z.string().min(1).max(100).optional(),dropdown:z.boolean().optional(),rate:z.number().finite().min(0).max(1e9).nullable(),quantity:z.number().finite().min(0).max(1e6).nullable(),unit:z.enum(rateUnits)}).refine(row=>row.unit!=='tuning'||isPianoTuning(row.name),'Per tuning is only available for piano tuning.');
-export const BudgetModelSchema=z.object({version:z.literal(1),estimate:z.number().finite().min(0).max(1e12).nullable().default(null),sections:z.array(z.object({id:z.string().min(1).max(100),name:z.string().max(200),rows:z.array(LineSchema).max(500)})).min(1).max(50),sessions:z.array(z.object({id:z.string().min(1).max(100),date:z.string().max(200),hours:z.number().finite().min(0).max(1e6).nullable()})).max(500),notes:z.string().max(10000)});
+export const BudgetModelSchema=z.object({version:z.literal(1),estimate:z.number().finite().min(0).max(1e12).nullable().default(null),sections:z.array(z.object({id:z.string().min(1).max(100),name:z.string().max(200),rows:z.array(LineSchema).max(500)})).min(1).max(50),sessions:z.array(z.object({id:z.string().min(1).max(100),date:z.string().max(200),details:z.string().max(1000).optional(),hours:z.number().finite().min(0).max(1e6).nullable()})).max(500),notes:z.string().max(10000)});
 export type BudgetModel=z.infer<typeof BudgetModelSchema>;
 export type BudgetLine=BudgetModel['sections'][number]['rows'][number];
 export const newBudgetLine=():BudgetLine=>({id:crypto.randomUUID(),name:'',details:'',rate:null,quantity:null,unit:'hour'});
@@ -53,13 +53,25 @@ export function readBudgetModel(budget:Budget):BudgetModel{
  if(saved!==undefined)return BudgetModelSchema.parse(saved);
  const sections:BudgetModel['sections']=[],sessions:BudgetModel['sessions']=[],extra:string[]=[];let estimate:number|null=null;
  budget.sheets.forEach((raw,sheetIndex)=>{
-  const sheet=raw as Sheet,cells=sheetCells(sheet);let section:BudgetModel['sections'][number]|null=null,previous='';
+  const sheet=raw as Sheet,cells=sheetCells(sheet);let section:BudgetModel['sections'][number]|null=null,previous='',sessionColumns:{date:number;details:number;hours:number}|null=null;
   cells.forEach((row,r)=>{
    if(!row)return;
    const label=[text(row[0]),text(row[1])].filter(Boolean).join(' '),details=[text(row[2]),text(row[3])].filter(Boolean).join(' '),rate=numeric(row[4]),quantity=numeric(row[5]);
    const date=text(row[7]),hours=numeric(row[11]);
    if(/^(agreed )?estimate$/i.test(date)){estimate=hours;return}
    if(/^(remaining budget|over budget)$/i.test(date))return;
+   const headings=row.map(cell=>text(cell)),dateColumn=headings.findIndex(value=>/^dates?:?$/i.test(value)),detailsColumn=headings.findIndex(value=>/^details$/i.test(value)),hoursColumn=headings.findIndex(value=>/^hours$/i.test(value));
+   if(dateColumn>=0&&detailsColumn>=0&&hoursColumn>=0){sessionColumns={date:dateColumn,details:detailsColumn,hours:hoursColumn};section=null;previous='';return}
+   const expenseHeading=/^rate$/i.test(text(row[4]))&&/^total$/i.test(text(row[6]));
+   if(expenseHeading)sessionColumns=null;
+   if(/^sessions:?$/i.test(label)&&!expenseHeading)return;
+   if(sessionColumns){
+    if(/^total hours$/i.test(label))return;
+    const sessionDate=text(row[sessionColumns.date]),sessionDetails=text(row[sessionColumns.details]),sessionHours=numeric(row[sessionColumns.hours]);
+    if(sessionDate||sessionDetails||sessionHours!==null)sessions.push({id:`sheet-${sheetIndex}-session-${r}`,date:sessionDate,details:sessionDetails,hours:sessionHours});
+    return;
+   }
+
    if(r>=3&&((date&&!/^(dates?:|budget breakdown)$/i.test(date))||hours!==null))sessions.push({id:`sheet-${sheetIndex}-session-${r}`,date,hours});
    if(/^rate$/i.test(text(row[4]))&&/^total$/i.test(text(row[6]))){section={id:`sheet-${sheetIndex}-section-${r}`,name:(budget.sheets.length>1?`${sheet.name||'Budget'} · `:'')+(label||'Expenses'),rows:[]};sections.push(section);previous='';return;}
    if(/^sub\s*total$|^total$|^grand total$/i.test(label)){section=null;previous='';return;}

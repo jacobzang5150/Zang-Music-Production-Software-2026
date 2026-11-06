@@ -12,9 +12,13 @@ export function useBudgetFit(dialog:RefObject<HTMLDialogElement|null>,ready:bool
    // A pinch changes the visual viewport, not the sheet's base fit. Never reset it.
    if(window.visualViewport&&Math.abs(window.visualViewport.scale-1)>.1)return;
    const style=getComputedStyle(scroller),available=scroller.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
-   const width=Math.max(1140,sheet.scrollWidth,sheet.offsetWidth);
+   const width=Math.max(900,sheet.scrollWidth,sheet.offsetWidth),height=Math.max(sheet.scrollHeight,sheet.offsetHeight);
    if(available<=0)return;
-   const zoom=String(Math.max(.01,Math.floor(Math.min(1,(available-1)/width)*10000)/10000));
+   const before=Math.max(0,sheet.getBoundingClientRect().top-scroller.getBoundingClientRect().top+scroller.scrollTop-parseFloat(style.paddingTop));
+   const availableHeight=scroller.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-before;
+   const portrait=window.innerHeight>=window.innerWidth&&!element.classList.contains('budget-mobile-keyboard');
+   const heightFit=portrait&&availableHeight>0&&height>0?(availableHeight-1)/height:1;
+   const zoom=String(Math.max(.01,Math.floor(Math.min(1,(available-1)/width,heightFit)*10000)/10000));
    if(element.style.getPropertyValue('--budget-sheet-zoom')!==zoom)element.style.setProperty('--budget-sheet-zoom',zoom);
   };
   fit();const observer=new ResizeObserver(fit);observer.observe(scroller);observer.observe(sheet);
