@@ -5,7 +5,7 @@ import {useEffect,type RefObject} from 'react';
 export function useBudgetMobile(dialog:RefObject<HTMLDialogElement|null>){
  useEffect(()=>{
   const element=dialog.current;if(!element)return;
-  const mobile=window.matchMedia('(max-width:800px)'),viewport=window.visualViewport;
+  const mobile=window.matchMedia('(max-width:800px), (max-width:1100px) and (pointer:coarse) and (hover:none)'),viewport=window.visualViewport;
   let baseline=window.innerHeight,frame=0;
   const clear=()=>{element.style.removeProperty('--budget-mobile-height');element.style.removeProperty('--budget-mobile-top');element.classList.remove('budget-mobile-keyboard')};
   const update=()=>{
@@ -14,7 +14,7 @@ export function useBudgetMobile(dialog:RefObject<HTMLDialogElement|null>){
    if(viewport&&Math.abs(viewport.scale-1)>.1)return;
    const height=viewport?.height??window.innerHeight;
    const editing=element.contains(document.activeElement)&&document.activeElement?.matches('input:not([type=file]),textarea');
-   if(!editing)baseline=Math.max(baseline,height,window.innerHeight);
+   if(!editing&&!element.classList.contains('budget-mobile-keyboard'))baseline=Math.max(height,window.innerHeight);
    const keyboard=!!editing&&baseline-height>120;
    element.style.setProperty('--budget-mobile-height',height+'px');
    element.style.setProperty('--budget-mobile-top',(viewport?.offsetTop??0)+'px');
