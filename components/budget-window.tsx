@@ -7,6 +7,7 @@ import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange}
 import {moveBudgetRow,type BudgetMove} from '@/lib/budget-order';
 import {useBudgetDrag} from './budget-drag';
 import {useBudgetMobile} from './use-budget-mobile';
+import {useBudgetFit} from './use-budget-fit';
 import './budget.css';
 import BudgetSharing from './budget-sharing';
 import {sameBudgetVersion,budgetHeading,type SavedBudget} from '@/lib/budget-sharing';
@@ -22,6 +23,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
  const record=useRef<SavedBudget|null>(null),modelRef=useRef<BudgetModel|null>(null),pending=useRef<BudgetModel|null>(null),timer=useRef<ReturnType<typeof setTimeout>|null>(null),saving=useRef<Promise<boolean>|null>(null),imported=useRef(false),mounted=useRef(true);
  const history=useRef(emptyBudgetHistory());
  useBudgetMobile(dialog);
+ useBudgetFit(dialog,!!model);
  const flush=useCallback(async():Promise<boolean>=>{
   if(timer.current)clearTimeout(timer.current);
   if(saving.current){if(!await saving.current)return false;return flush()}
@@ -145,7 +147,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
   {error&&<div className="budget-error" role="alert">{error}<button onClick={()=>void(model?flush():load())}><RotateCcw size={14}/> Retry</button>{model&&<button onClick={()=>{if(confirm('Discard unsaved budget changes and reload the saved budget?'))void load()}}>Reload saved budget</button>}</div>}
   <div className="budget-scroll">{!model?<div className="budget-placeholder">{status}</div>:<>
    {budgetInfo&&<BudgetSharing budget={budgetInfo} busy={working} open={sharingOpen} onClose={()=>setSharingOpen(false)} onChange={changeSharing}/>}
-   <div className="budget-body-title">{canUndo&&<button className="budget-text-button" disabled={working} title="Undo (Command+Z)" onClick={undoBudget}><RotateCcw size={14}/> Undo</button>}<div className="budget-summary"><label className="budget-estimate"><span>ESTIMATE</span><div><span aria-hidden="true">$</span><input aria-label="Project estimate" type="number" inputMode="decimal" min={0} max={1e12} step="any" placeholder="0.00" disabled={working} value={model.estimate??''} onChange={e=>changed({...model,estimate:numberValue(e.target.value,1e12)},'estimate')}/></div></label><span className="budget-total-caption">PROJECT TOTAL <strong>{money.format(budgetTotal(model))}</strong></span><span className={'budget-total-caption budget-remaining'+((budgetRemaining(model)??0)<0?' is-over-budget':'')}><span>{(budgetRemaining(model)??0)<0?'OVER BUDGET':'REMAINING'}</span><output aria-label="Remaining project budget">{budgetRemaining(model)===null?'—':money.format(Math.abs(budgetRemaining(model)!))}</output></span></div></div>
+   <div className="budget-sheet"><div className="budget-body-title">{canUndo&&<button className="budget-text-button" disabled={working} title="Undo (Command+Z)" onClick={undoBudget}><RotateCcw size={14}/> Undo</button>}<div className="budget-summary"><label className="budget-estimate"><span>ESTIMATE</span><div><span aria-hidden="true">$</span><input aria-label="Project estimate" type="number" inputMode="decimal" min={0} max={1e12} step="any" placeholder="0.00" disabled={working} value={model.estimate??''} onChange={e=>changed({...model,estimate:numberValue(e.target.value,1e12)},'estimate')}/></div></label><span className="budget-total-caption">PROJECT TOTAL <strong>{money.format(budgetTotal(model))}</strong></span><span className={'budget-total-caption budget-remaining'+((budgetRemaining(model)??0)<0?' is-over-budget':'')}><span>{(budgetRemaining(model)??0)<0?'OVER BUDGET':'REMAINING'}</span><output aria-label="Remaining project budget">{budgetRemaining(model)===null?'—':money.format(Math.abs(budgetRemaining(model)!))}</output></span></div></div>
    <fieldset className="budget-fields" disabled={working}><div className="budget-layout"><div className="budget-expenses">
     {model.sections.map(section=><div className="budget-section" key={section.id}>
      <div className="budget-columns budget-section-heading"><label className="budget-section-name"><span className="sr-only">Section name</span><input aria-label={`Section name: ${section.name}`} maxLength={200} value={section.name} placeholder="Section name" onChange={e=>changed({...model,sections:model.sections.map(s=>s.id===section.id?{...s,name:e.target.value}:s)},'section:'+section.id+':name')}/></label><span>Rate</span><span>Quantity</span><span>Total</span><button className="budget-remove" aria-label={`Remove section ${section.name}`} title="Remove section" disabled={model.sections.length===1} onClick={()=>remove({...model,sections:model.sections.filter(s=>s.id!==section.id)})}><Trash2 size={15}/></button></div>
@@ -163,7 +165,7 @@ export default function BudgetWindow({project,importFile,onClose}:{project:{id:s
     <div className="budget-grand-total"><span>Total</span><output aria-label="Project budget total">{money.format(budgetTotal(model))}</output></div>
    </div><div className="budget-dates"><div className="budget-dates-heading"><h4>Dates</h4><span>Hours</span></div>{model.sessions.map((session,index)=><div className="budget-session" key={session.id}><input aria-label={`Session ${index+1} date`} placeholder="Date / session" maxLength={200} value={session.date} onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,date:e.target.value}:s)},'session:'+session.id+':date')}/><input aria-label={`Session ${index+1} hours`} type="number" inputMode="decimal" min={0} max={1e6} step="any" value={session.hours??''} placeholder="0" onChange={e=>changed({...model,sessions:model.sessions.map(s=>s.id===session.id?{...s,hours:numberValue(e.target.value,1e6)}:s)},'session:'+session.id+':hours')}/><button className="budget-remove" aria-label={`Remove session ${index+1}`} onClick={()=>remove({...model,sessions:model.sessions.filter(s=>s.id!==session.id)})}><X size={14}/></button></div>)}<button className="budget-text-button" disabled={model.sessions.length>=500} onClick={()=>changed({...model,sessions:[...model.sessions,{id:crypto.randomUUID(),date:'',hours:null}]})}><Plus size={15}/> Add session</button><div className="budget-hours-total"><span>Total hours</span><strong>{model.sessions.reduce((sum,s)=>sum+(s.hours??0),0).toLocaleString('en-US',{maximumFractionDigits:2})}</strong></div></div></div>
     <label className="budget-notes">Budget notes<textarea maxLength={10000} rows={3} value={model.notes} placeholder="Budget details, estimates, or additional expenses…" onChange={e=>changed({...model,notes:e.target.value},'notes')}/></label>
-   </fieldset>
+   </fieldset></div>
   </>}</div>
  </div></dialog>;
 }

@@ -28,11 +28,11 @@ export function useBudgetDrag(dialog:RefObject<HTMLDialogElement|null>,disabled:
   if(blocked.current||e.button!==0||!handle&&(e.pointerType==='touch'||(e.target as Element).closest('input,textarea,select,button,a,summary,details')))return;
   const source=e.currentTarget.closest<HTMLElement>('[data-budget-drag-kind]');if(!source||!dialog.current)return;
   e.preventDefault();e.stopPropagation();cancel();if(handle)e.currentTarget.focus({preventScroll:true});
-  const rect=source.getBoundingClientRect(),preview=source.cloneNode(true) as HTMLElement;
+  const rect=source.getBoundingClientRect(),preview=source.cloneNode(true) as HTMLElement,scale=source.offsetWidth?rect.width/source.offsetWidth:1;
   preview.classList.add('budget-drag-preview');preview.setAttribute('aria-hidden','true');preview.inert=true;
   const originals=Array.from(source.querySelectorAll('input,textarea,select'),node=>(node as unknown as {value:string}).value);preview.querySelectorAll('input,textarea,select').forEach((node,i)=>{const field=node as unknown as {value:string;tabIndex:number};field.value=originals[i];field.tabIndex=-1});
   preview.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));preview.removeAttribute('id');preview.querySelectorAll('details[open]').forEach(menu=>menu.removeAttribute('open'));
-  Object.assign(preview.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',height:rect.height+'px',margin:'0',opacity:'0.5',pointerEvents:'none',zIndex:'1000'});
+  Object.assign(preview.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width/scale+'px',height:rect.height/scale+'px',transform:'scale('+scale+')',transformOrigin:'top left',margin:'0',opacity:'0.5',pointerEvents:'none',zIndex:'1000'});
   dialog.current.appendChild(preview);active.current={source,capture:e.currentTarget,pointerId:e.pointerId,move,preview,x:e.clientX,y:e.clientY,offsetX:e.clientX-rect.left,offsetY:e.clientY-rect.top,originX:e.clientX,originY:e.clientY,moved:false,target:null,drop:null,cursor:document.body.style.cursor,select:document.body.style.userSelect};
   source.classList.add('budget-drag-source');begin.current();document.body.style.cursor='grabbing';document.body.style.userSelect='none';try{e.currentTarget.setPointerCapture(e.pointerId)}catch{}
  },[dialog,cancel]);
