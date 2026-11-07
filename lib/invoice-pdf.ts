@@ -1,19 +1,16 @@
 import fontkit from '@pdf-lib/fontkit';
-import {PDFDocument,StandardFonts,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
+import {PDFDocument,PDFName,PDFRawStream,PDFDict,decodePDFRawStream,StandardFonts,rgb,type PDFFont,type PDFPage} from 'pdf-lib';
 import {invoiceTotals,type Invoice} from './invoice.ts';
 import {invoiceDate,invoiceFilename,invoiceMoney,invoiceTerms} from './invoice-print.ts';
 export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:Uint8Array,fonts?:{body:Uint8Array;heading:Uint8Array}):Promise<Uint8Array>{
  const pdf=await PDFDocument.create();pdf.setTitle(invoiceFilename(invoice).slice(0,-4));pdf.setAuthor('Jacob Zang');pdf.setSubject(invoice.projectTitle);pdf.setCreator('Session');
  pdf.registerFontkit(fontkit);
- const body=await pdf.embedFont(fonts?.body||StandardFonts.Helvetica,{subset:true}),head=await pdf.embedFont(fonts?.heading||StandardFonts.TimesRomanBold,{subset:true});
+ const body=await pdf.embedFont(fonts?.body||StandardFonts.Helvetica,{subset:true}),head=await pdf.embedFont(fonts?.heading||StandardFonts.TimesRomanBold,{subset:false});
  const brand=brandBytes?await pdf.embedPng(brandBytes):null;
  let page:PDFPage=pdf.addPage([612,792]),y=334;
  const fontSize={metadata:12,column:12,body:11,title:28,summary:14};
- const width=(value:string,size:number,font:PDFFont)=>font===head?[...value].reduce((sum,char)=>sum+font.widthOfTextAtSize(char.toUpperCase(),char!==char.toUpperCase()?size*.8:size)+.4,0):font.widthOfTextAtSize(value,size);
- const draw=(value:string,x:number,top:number,size=12,font:PDFFont=body)=>{
-  if(font!==head){page.drawText(value,{x,y:792-top-size,font,size,color:rgb(0,0,0)});return}
-  for(const char of value){const fontSize=char!==char.toUpperCase()?size*.8:size;page.drawText(char.toUpperCase(),{x,y:792-top-size,font,size:fontSize,color:rgb(0,0,0)});x+=font.widthOfTextAtSize(char.toUpperCase(),fontSize)+.4}
- };
+ const width=(value:string,size:number,font:PDFFont)=>font.widthOfTextAtSize(value,size);
+ const draw=(value:string,x:number,top:number,size=12,font:PDFFont=body)=>page.drawText(value,{x,y:792-top-size,font,size,color:rgb(0,0,0)});
  const right=(value:string,x:number,top:number,size=12,font:PDFFont=body)=>draw(value,x-width(value,size,font),top,size,font);
  function wrap(value:string,maxWidth:number,size=12,font=body){
   const lines:string[]=[];let current='';
@@ -54,10 +51,27 @@ export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:
  draw('Terms and Conditions',36,y,fontSize.summary,head);y+=24;
  for(const term of invoiceTerms){draw(term,36,y,fontSize.body);y+=16}
  const pages=pdf.getPages();if(pages.length>1)pages.forEach((p,i)=>p.drawText(`${i+1} / ${pages.length}`,{x:550,y:20,size:9,font:body}));
+ // Full OpenType/CFF fonts require FontFile3 with an OpenType subtype.
+ await pdf.flush();
+ const descriptors=new Set<unknown>();
+ for(const [ref,object] of pdf.context.enumerateIndirectObjects()){
+  if(!(object instanceof PDFDict))continue;
+  const file=object.get(PDFName.of('FontFile2'))||object.get(PDFName.of('FontFile3'));
+  if(!file)continue;
+  const stream=pdf.context.lookup(file);
+  if(!(stream instanceof PDFRawStream))continue;
+  const bytes=decodePDFRawStream(stream).decode();
+  if(String.fromCharCode(...bytes.slice(0,4))!=='OTTO')continue;
+  object.delete(PDFName.of('FontFile2'));object.set(PDFName.of('FontFile3'),file);
+  stream.dict.set(PDFName.of('Subtype'),PDFName.of('OpenType'));descriptors.add(ref);
+ }
+ for(const [,object] of pdf.context.enumerateIndirectObjects()){
+  if(object instanceof PDFDict&&descriptors.has(object.get(PDFName.of('FontDescriptor'))))object.set(PDFName.of('Subtype'),PDFName.of('CIDFontType0'));
+ }
  return pdf.save();
 }
 export async function downloadInvoicePdf(invoice:Invoice,paid=false){
- const assets=await Promise.all(['/invoice-brand.png','/invoice-fonts/body.ttf','/invoice-fonts/heading.ttf'].map(async path=>{const response=await fetch(path);if(!response.ok)throw new Error('Could not load invoice formatting. Please retry.');return new Uint8Array(await response.arrayBuffer())}));
+ const assets=await Promise.all(['/invoice-brand.png','/invoice-fonts/arian-lt-demi.ttf','/invoice-fonts/copperplate-pdf.otf'].map(async path=>{const response=await fetch(path);if(!response.ok)throw new Error('Could not load invoice formatting. Please retry.');return new Uint8Array(await response.arrayBuffer())}));
  const bytes=await generateInvoicePdf(invoice,paid,assets[0],{body:assets[1],heading:assets[2]});
  const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:'application/pdf'})),link=document.createElement('a');link.href=url;link.download=invoiceFilename(invoice);document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
