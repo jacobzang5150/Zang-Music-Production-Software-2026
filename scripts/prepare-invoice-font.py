@@ -1,7 +1,9 @@
-"""Make a PDF-compatible CID CFF font without changing Copperplate outlines."""
+"""Make a PDF-compatible CID CFF font with dotless Copperplate small-cap i."""
 from pathlib import Path
 from fontTools.ttLib import TTFont
 from fontTools.pens.t2CharStringPen import T2CharStringPen
+from fontTools.pens.recordingPen import RecordingPen
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.cffLib import FDArrayIndex, FontDict, FDSelect
 from fontTools.ttLib.tables.DefaultTable import DefaultTable
 root = Path(__file__).resolve().parents[1] / 'public/invoice-fonts'
@@ -13,11 +15,34 @@ glyphs = font.getGlyphSet()
 converted = {}
 for name in top.charset:
     pen = T2CharStringPen(glyphs[name].width, glyphs)
-    glyphs[name].draw(pen)
+    if name == font.getBestCmap()[ord('i')]:
+        recording = RecordingPen()
+        glyphs[name].draw(recording)
+        contours = []
+        for operation, arguments in recording.value:
+            if operation == 'moveTo':
+                contours.append([])
+            contours[-1].append((operation, arguments))
+        bounded = []
+        for contour in contours:
+            recording.value = contour
+            bounds = BoundsPen(glyphs)
+            recording.replay(bounds)
+            bounded.append((contour, bounds.bounds))
+        # Preserve the full small-cap stem; omit only its detached upper dot.
+        stem_top = min(bounds[3] for _, bounds in bounded if bounds)
+        for contour, bounds in bounded:
+            if bounds and bounds[1] > stem_top:
+                continue
+            recording.value = contour
+            recording.replay(pen)
+    else:
+        glyphs[name].draw(pen)
     converted[name] = pen.getCharString(private=top.Private, globalSubrs=cff.GlobalSubrs)
 for name, charstring in converted.items():
     top.CharStrings[name] = charstring
 font.recalcBBoxes = False
+font.save(root / 'copperplate-display.otf')
 old_names = top.charset
 names = ['.notdef'] + [f'cid{i:05d}' for i in range(1, len(old_names))]
 top.CharStrings.charStrings = {new: top.CharStrings.charStrings[old] for old, new in zip(old_names, names)}
