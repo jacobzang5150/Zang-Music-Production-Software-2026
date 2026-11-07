@@ -41,10 +41,14 @@ Deno.serve(async(req:Request)=>{
       const parsed=InvoiceSchema.safeParse(claims.project),revision=claims.revision;
       if(!parsed.success||!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid invoice'},400);
       const data=parsed.data;
-      if(revision===0){const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:data.id,data,revision:1})});return r.ok?reply({...data,revision:1}):reply({error:r.status===409?'Invoice already exists. Reopen it.':'Could not create invoice.'},r.status===409?409:502)}
+      if(revision===0){
+       const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:data.id,data,revision:1})});
+       if(!r.ok){const detail=await r.json().catch(()=>null);const exhausted=detail?.message==='All 9000 invoice numbers have been used. No number was reused.';return reply({error:exhausted?detail.message:r.status===409?'Invoice already exists. Reopen it.':'Could not create invoice.'},exhausted?422:r.status===409?409:502)}
+       const rows=await r.json();return reply({...rows[0].data,revision:rows[0].revision});
+      }
       q.set('id','eq.'+data.id);q.set('revision','eq.'+revision);
       const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data,revision:revision!+1})});if(!r.ok)throw new Error('Invoice save failed');
-      return (await r.json()).length?reply({...data,revision:revision!+1}):reply({error:'Invoice changed in another tab. Close and reopen it before editing.'},409);
+      const rows=await r.json();return rows.length?reply({...rows[0].data,revision:rows[0].revision}):reply({error:'Invoice changed in another tab. Close and reopen it before editing.'},409);
     }
     if(resource==='budgets'){
       const link=claims.action==='import'?BudgetLinkSchema.safeParse(claims.project):null;
