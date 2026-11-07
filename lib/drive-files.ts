@@ -1,5 +1,5 @@
 export const DRIVE_FOLDER='application/vnd.google-apps.folder';
-export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;trashed?:boolean;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canTrash?:boolean;canShare?:boolean;canDownload?:boolean;canAddChildren?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
+export type DriveFile={id:string;name:string;mimeType:string;size?:string;modifiedTime?:string;trashed?:boolean;webViewLink?:string;resourceKey?:string;parents?:string[];capabilities?:{canEdit?:boolean;canTrash?:boolean;canShare?:boolean;canDownload?:boolean;canAddChildren?:boolean;canMoveItemWithinDrive?:boolean};shortcutDetails?:{targetId:string;targetMimeType:string;targetResourceKey?:string}};
 export function parseDriveLink(value:string):{id:string;resourceKey?:string}|null{
  try{
   const u=new URL(value);
@@ -16,7 +16,7 @@ export function driveFileUrl(file:DriveFile){
 export function readableSize(value?:string){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(1)+' GB'}
 export function isAudio(file:DriveFile){return file.mimeType.startsWith('audio/')||/\.(wav|mp3|m4a|aac|ogg|flac|aif|aiff)$/i.test(file.name)}
 export function isText(file:DriveFile){return file.mimeType==='text/plain'||/\.(txt|md|csv|json)$/i.test(file.name)&&!file.mimeType.startsWith('application/vnd.google-apps.')}
-export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,trashed,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren,canTrash,canShare),shortcutDetails';
+export const DRIVE_FIELDS='id,name,mimeType,size,modifiedTime,trashed,webViewLink,resourceKey,parents,capabilities(canEdit,canDownload,canAddChildren,canTrash,canShare,canMoveItemWithinDrive),shortcutDetails';
 export class DriveError extends Error{status:number;constructor(message:string,status=0){super(message);this.status=status}}
 export async function checkDriveResponse(response:Response){
  if(response.ok||response.status===308)return response;
@@ -70,6 +70,19 @@ export class DriveApi{
   await this.request('files/'+encodeURIComponent(file.id)+'?supportsAllDrives=true',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
  }
  async rename(id:string,name:string){return (await this.request('files/'+encodeURIComponent(id)+'?supportsAllDrives=true&fields='+encodeURIComponent(DRIVE_FIELDS),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})).json() as Promise<DriveFile>}
+ /** Move only a file into a direct subfolder of its current folder. Re-read both
+  * records before writing so stale listings never move an already-relocated file. */
+ async moveToSubfolder(file:DriveFile,source:DriveFile,destination:DriveFile,signal?:AbortSignal){
+  if(file.mimeType===DRIVE_FOLDER||file.id===destination.id||source.id===destination.id)throw new DriveError('Choose a subfolder to move this file into.');
+  const [latest,target]=await Promise.all([this.get(file.id,signal),this.get(destination.id,signal)]);
+  if(latest.trashed||latest.mimeType===DRIVE_FOLDER||!latest.parents?.includes(source.id))throw new DriveError('This file changed location. Refresh the folder before moving it.');
+  if(latest.capabilities?.canMoveItemWithinDrive!==true)throw new DriveError('This Google account cannot move this file.');
+  if(target.trashed||target.mimeType!==DRIVE_FOLDER||!target.parents?.includes(source.id))throw new DriveError('This destination is no longer a subfolder here. Refresh the folder.');
+  if(target.capabilities?.canAddChildren!==true)throw new DriveError('This Google account cannot add files to this folder.');
+  const params=new URLSearchParams({supportsAllDrives:'true',fields:DRIVE_FIELDS,addParents:target.id,removeParents:source.id});
+  const moved=await (await this.request('files/'+encodeURIComponent(latest.id)+'?'+params,{method:'PATCH',headers:{'Content-Type':'application/json'},body:'{}',signal})).json() as DriveFile;
+  this.remember(moved);return moved;
+ }
  async content(file:DriveFile,signal?:AbortSignal){
   if(file.capabilities?.canDownload===false)throw new DriveError('The owner has disabled downloads and playback for this file.');
   return (await this.request('files/'+encodeURIComponent(file.id)+'?alt=media&supportsAllDrives=true',{signal})).blob();

@@ -92,3 +92,44 @@ test('manual folder creation stays in the current folder and retries the same re
   await assert.rejects(api.createFolder({...parent,capabilities:{canAddChildren:false}},'Stems',id),/cannot create/);assert.equal(writes,2);
  }finally{globalThis.fetch=real}
 });
+
+test('moving a file updates only its parent and preserves its ID and contents',async()=>{
+ const real=globalThis.fetch;let writes=0;
+ const source={id:'album',name:'Album',mimeType:DRIVE_FOLDER};
+ const file={id:'mix',name:'Mix.wav',mimeType:'audio/wav',parents:['album'],capabilities:{canMoveItemWithinDrive:true}};
+ const target={id:'mixes',name:'MIXES',mimeType:DRIVE_FOLDER,parents:['album'],capabilities:{canAddChildren:true}};
+ try{
+  globalThis.fetch=async(input,init)=>{
+   const u=new URL(String(input));
+   if(init?.method==='PATCH'){writes++;assert.equal(u.pathname,'/drive/v3/files/mix');assert.equal(u.searchParams.get('addParents'),'mixes');assert.equal(u.searchParams.get('removeParents'),'album');assert.equal(u.searchParams.get('supportsAllDrives'),'true');assert.deepEqual(JSON.parse(String(init.body)),{});return Response.json({...file,parents:['mixes']})}
+   return Response.json(u.pathname.endsWith('/mix')?file:target);
+  };
+  const moved=await new DriveApi('test').moveToSubfolder(file,source,target);assert.equal(moved.id,file.id);assert.deepEqual(moved.parents,['mixes']);assert.equal(writes,1);
+ }finally{globalThis.fetch=real}
+});
+test('stale locations, forbidden moves and invalid destination folders never issue a move',async()=>{
+ const real=globalThis.fetch;let writes=0;
+ const source={id:'album',name:'Album',mimeType:DRIVE_FOLDER};
+ const file={id:'mix',name:'Mix.wav',mimeType:'audio/wav',parents:['album'],capabilities:{canMoveItemWithinDrive:true}};
+ const target={id:'mixes',name:'MIXES',mimeType:DRIVE_FOLDER,parents:['album'],capabilities:{canAddChildren:true}};
+ let latestFile={...file},latestTarget={...target};
+ try{
+  globalThis.fetch=async(input,init)=>{if(init?.method==='PATCH')writes++;return Response.json(String(input).includes('/files/mix?')?latestFile:latestTarget)};
+  const api=new DriveApi('test');
+  latestFile={...file,parents:['elsewhere']};await assert.rejects(api.moveToSubfolder(file,source,target),/changed location/);
+  latestFile={...file,capabilities:{canMoveItemWithinDrive:false}};await assert.rejects(api.moveToSubfolder(file,source,target),/cannot move/);
+  latestFile=file;latestTarget={...target,parents:['elsewhere']};await assert.rejects(api.moveToSubfolder(file,source,target),/no longer a subfolder/);
+  latestTarget={...target,capabilities:{canAddChildren:false}};await assert.rejects(api.moveToSubfolder(file,source,target),/cannot add/);
+  await assert.rejects(api.moveToSubfolder({...file,mimeType:DRIVE_FOLDER},source,target),/Choose a subfolder/);assert.equal(writes,0);
+ }finally{globalThis.fetch=real}
+});
+test('a new upload uses the selected drop folder as its only parent',async()=>{
+ const real=globalThis.fetch;
+ try{
+  globalThis.fetch=async(input,init)=>{
+   if(init?.method==='POST'){assert.deepEqual(JSON.parse(String(init.body)),{name:'Take.wav',parents:['selected-subfolder']});return new Response(null,{headers:{Location:'https://www.googleapis.com/upload/session'}})}
+   return Response.json({id:'new',name:'Take.wav',mimeType:'audio/wav',parents:['selected-subfolder']});
+  };
+  const result=await new DriveApi('test').upload(new File(['audio'],'Take.wav',{type:'audio/wav'}),'selected-subfolder',()=>{},new AbortController().signal);assert.deepEqual(result.parents,['selected-subfolder']);
+ }finally{globalThis.fetch=real}
+});
