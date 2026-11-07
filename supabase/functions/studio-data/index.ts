@@ -1,3 +1,4 @@
+import {InvoiceSchema} from '../../../lib/invoice.ts';
 import {verifyGatewayRequest} from '../../../lib/gateway-auth.ts';
 import {DriveAuthSchema} from '../../../lib/drive-auth-schema.ts';
 import {DriveFolderSchema,DriveLinkSchema} from '../../../lib/drive-folders-schema.ts';
@@ -20,7 +21,7 @@ Deno.serve(async(req:Request)=>{
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
     const root=Deno.env.get('SUPABASE_URL')+'/rest/v1/';
     const resource=claims.resource||'projects';
-    const table=resource==='budgets'?'studio_budgets':resource==='driveAuth'?'studio_drive_auth':resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
+    const table=resource==='invoices'?'studio_invoices':resource==='budgets'?'studio_budgets':resource==='driveAuth'?'studio_drive_auth':resource==='folders'?'studio_drive_folders':resource==='clients'?'studio_clients':resource==='leads'?'studio_leads':'studio_projects';
     const base=()=>new URLSearchParams({owner:'eq.'+claims.owner});
     async function getRows(tableName:string,query:URLSearchParams){const r=await fetch(root+tableName+'?'+query,{headers});if(!r.ok)throw new Error('Database read failed');return await r.json();}
     async function ensureClient(name:string,clientId?:string){
@@ -29,6 +30,21 @@ Deno.serve(async(req:Request)=>{
       const r=await fetch(root+'studio_clients?'+q,{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify({owner:claims.owner,id,data:{id,name:name.trim()},revision:1})});
       if(!r.ok)throw new Error('Client save failed');const inserted=await r.json();if(inserted.length)return {...inserted[0].data,revision:inserted[0].revision};
       const find=base();find.set('name_key','eq.'+name.trim().toLowerCase());const rows=await getRows('studio_clients',find);if(!rows.length)throw new Error('Client lookup failed');return {...rows[0].data,revision:rows[0].revision};
+    }
+    if(resource==='invoices'){
+      const q=base();
+      if(claims.action==='list'){
+        if(typeof claims.id!=='string'||!claims.id||claims.id.length>200)return reply({error:'Invalid invoice'},400);
+        q.set('id','eq.'+claims.id);const rows=await getRows(table,q);return reply(rows.map((r:{data:object;revision:number})=>({...r.data,revision:r.revision})));
+      }
+      if(claims.action!=='save')return reply({error:'Invalid invoice operation'},400);
+      const parsed=InvoiceSchema.safeParse(claims.project),revision=claims.revision;
+      if(!parsed.success||!Number.isInteger(revision)||revision!<0)return reply({error:'Invalid invoice'},400);
+      const data=parsed.data;
+      if(revision===0){const r=await fetch(root+table,{method:'POST',headers,body:JSON.stringify({owner:claims.owner,id:data.id,data,revision:1})});return r.ok?reply({...data,revision:1}):reply({error:r.status===409?'Invoice already exists. Reopen it.':'Could not create invoice.'},r.status===409?409:502)}
+      q.set('id','eq.'+data.id);q.set('revision','eq.'+revision);
+      const r=await fetch(root+table+'?'+q,{method:'PATCH',headers,body:JSON.stringify({data,revision:revision!+1})});if(!r.ok)throw new Error('Invoice save failed');
+      return (await r.json()).length?reply({...data,revision:revision!+1}):reply({error:'Invoice changed in another tab. Close and reopen it before editing.'},409);
     }
     if(resource==='budgets'){
       const link=claims.action==='import'?BudgetLinkSchema.safeParse(claims.project):null;
