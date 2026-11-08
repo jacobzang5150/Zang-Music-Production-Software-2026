@@ -31,9 +31,16 @@ export function invoiceTotals(invoice:Invoice,paid=false){
  return {fees,expenses,total,received,balance:Math.max(0,Math.round((total-received)*100)/100)};
 }
 // 0000 marks an unsaved draft. Supabase reserves the actual four-digit number.
-export function createInvoice(project:Project,budget:SavedBudget,now=new Date(),previous?:Invoice):Invoice{
+/** Shared invoices follow the latest delivery among their linked projects. */
+export function invoiceDueDate(project:Project,members:Invoice['projects'],issuedAt:string,previous?:Invoice,allProjects:Project[]=[project]){
+ const ids=new Set(members.map(member=>member.id));
+ const delivered=allProjects.filter(item=>ids.has(item.id)&&item.deliveredAt).map(item=>Date.parse(item.deliveredAt!));
+ const latest=delivered.length?Math.max(...delivered):0;
+ return latest?new Date(latest+30*86400000).toISOString():previous?.dueAt||new Date(Date.parse(issuedAt)+30*86400000).toISOString();
+}
+export function createInvoice(project:Project,budget:SavedBudget,now=new Date(),previous?:Invoice,allProjects:Project[]=[project]):Invoice{
  const projects=budget.linkedProjects?.length?budget.linkedProjects:[{id:project.id,client:project.client,name:project.name}];
  const lines=invoiceLines(readBudgetModel(budget)).map(line=>{const old=previous?.lines.find(item=>item.id===line.id);return old?{...line,included:old.included}:line});
  const issuedAt=previous?.issuedAt||now.toISOString();
- return InvoiceSchema.parse({id:budget.budgetKey||'project:'+project.id,number:previous?.number||'0000',payee:'Jacob Zang',billTo:previous?.billTo||[...new Set(projects.map(p=>p.client))].join(' / '),projectTitle:projects.map(p=>p.name).join(', '),projects,issuedAt,dueAt:previous?.dueAt||new Date(Date.parse(project.deliveredAt||issuedAt)+30*86400000).toISOString(),budgetRevision:budget.revision,amountReceived:previous?.amountReceived||0,notes:previous?.notes||'',lines});
+ return InvoiceSchema.parse({id:budget.budgetKey||'project:'+project.id,number:previous?.number||'0000',payee:'Jacob Zang',billTo:previous?.billTo||[...new Set(projects.map(p=>p.client))].join(' / '),projectTitle:projects.map(p=>p.name).join(', '),projects,issuedAt,dueAt:invoiceDueDate(project,projects,issuedAt,previous,allProjects),budgetRevision:budget.revision,amountReceived:previous?.amountReceived||0,notes:previous?.notes||'',lines});
 }

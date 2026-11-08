@@ -4,7 +4,7 @@ import {invoiceLines,invoiceTotals,createInvoice} from '../lib/invoice.ts';
 import {invoiceHtml} from '../lib/invoice-print.ts';
 import {createBudget} from '../lib/budget.ts';
 import {readBudgetModel,writeBudgetModel,type BudgetLine} from '../lib/budget-model.ts';
-import {newProject} from '../lib/projects.ts';
+import {newProject,paymentStatus,applyDeliveryTransition} from '../lib/projects.ts';
 const line=(id:string,name:string,rate:number,quantity=1,extra:Partial<BudgetLine>={}):BudgetLine=>({id,name,details:'',rate,quantity,unit:'hour',...extra});
 function fixture(){
  const project={...newProject(),client:'Sample Artist',name:'Record',deliveredAt:'2026-11-07T18:00:00.000Z'};
@@ -29,5 +29,21 @@ test('linked projects use one budget identity and refreshing preserves choices a
 });
 test('print output excludes unselected expenses and escapes client text',()=>{
  const {project,budget}=fixture(),invoice=createInvoice(project,budget);invoice.billTo='<script>alert(1)</script>';
- const html=invoiceHtml(invoice);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('Recording Studio Rental'));assert(html.includes('$1,240.00'));assert(html.includes('Payable to Jacob Zang'));
+ const html=invoiceHtml(invoice);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('Recording Studio Rental'));assert(html.includes('$1,240'));assert(html.includes('Checks made payable to Jacob Zang'));
+});
+
+test('invoicing before delivery does not start the clock; delivery updates the due date',()=>{
+ const {project,budget}=fixture(),before={...project,deliveredAt:null,paymentReceivedAt:null};
+ const invoice=createInvoice(before,budget,new Date('2026-11-01T12:00:00Z'));
+ assert.equal(paymentStatus(before).state,'undelivered');assert.equal(before.deliveredAt,null);
+ const delivered=applyDeliveryTransition(before,{...before,deliveredAt:'2026-11-08T12:00:00Z'},new Date('2026-11-08T12:00:00Z'));
+ assert.equal(paymentStatus(delivered,new Date('2026-11-08T12:00:00Z')).daysRemaining,30);
+ const updated=createInvoice(delivered,budget,new Date(),invoice);
+ assert.equal(updated.dueAt,'2026-12-08T12:00:00.000Z');assert.equal(updated.issuedAt,invoice.issuedAt);assert.equal(updated.number,invoice.number);
+});
+test('linked invoice due dates are consistent whichever member is opened',()=>{
+ const {project,budget}=fixture(),other={...project,id:'second',deliveredAt:'2026-11-10T12:00:00.000Z'};
+ const shared={...budget,linkedProjects:[project,other].map(p=>({id:p.id,client:p.client,name:p.name}))};
+ assert.equal(createInvoice(project,shared,new Date(),undefined,[project,other]).dueAt,'2026-12-10T12:00:00.000Z');
+ assert.equal(createInvoice(other,shared,new Date(),undefined,[project,other]).dueAt,'2026-12-10T12:00:00.000Z');
 });
