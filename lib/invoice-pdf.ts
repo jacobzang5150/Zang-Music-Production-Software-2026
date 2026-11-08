@@ -35,11 +35,11 @@ export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:
  const titleTop=Math.max(250,metaEnd+16);draw('Invoice',36,titleTop,fontSize.title,head);y=tableHeader(Math.max(334,titleTop+76));
  let index=0;
  for(const line of invoice.lines.filter(line=>line.included&&line.amount>0)){
-  const names=wrap(line.name,197,fontSize.body),details=line.details?wrap(line.details,197,fontSize.body):[];
-  const height=Math.max(36,14+(names.length+details.length)*14);
+  const sections=line.section.trim()?wrap(line.section,197,fontSize.body,head):[],names=wrap(line.name,197,fontSize.body),details=line.details?wrap(line.details,197,fontSize.body):[];
+  const height=Math.max(36,14+(sections.length+names.length+details.length)*14);
   if(y+height>675)continuation();
   if(index%2===0)page.drawRectangle({x:36,y:792-y-height,width:540,height,color:rgb(.927,.927,.927)});
-  names.forEach((text,i)=>draw(text,40,y+7+i*14,fontSize.body));details.forEach((text,i)=>draw(text,40,y+7+(names.length+i)*14,fontSize.body));
+  sections.forEach((text,i)=>draw(text,40,y+7+i*14,fontSize.body,head));names.forEach((text,i)=>draw(text,40,y+7+(sections.length+i)*14,fontSize.body));details.forEach((text,i)=>draw(text,40,y+7+(sections.length+names.length+i)*14,fontSize.body));
   centered(invoiceMoney(line.rate)+'/'+(line.unit==='hour'?'hr':line.unit),241,130,y+8,fontSize.body);centered(String(line.quantity),371,85,y+8,fontSize.body);right(invoiceMoney(line.amount),570,y+8,fontSize.body);
   y+=height;index++;
  }
