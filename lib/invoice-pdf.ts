@@ -33,15 +33,14 @@ export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:
  }
  const metaEnd=Math.max(178+recipient.length*18,metadataY);
  const titleTop=Math.max(250,metaEnd+16);draw('Invoice',36,titleTop,fontSize.title,head);y=tableHeader(Math.max(334,titleTop+76));
- let index=0;
  for(const line of invoicePrintRows(invoice)){
   const sections=line.section.trim()?wrap(line.section,197,fontSize.body,head):[],names=line.descriptions.flatMap(text=>wrap(text,197,fontSize.body)),rates=wrap(line.rateLabel,122,fontSize.body),quantities=wrap(line.quantityLabel,77,fontSize.body);
-  const height=Math.max(36,14+Math.max(sections.length+names.length,rates.length,quantities.length)*14);
+  const height=Math.max(36,14+(sections.length+Math.max(names.length,rates.length,quantities.length))*14);
   if(y+height>675)continuation();
-  if(index%2===0)page.drawRectangle({x:36,y:792-y-height,width:540,height,color:rgb(.927,.927,.927)});
+  if(line.shaded)page.drawRectangle({x:36,y:792-y-height,width:540,height,color:rgb(.927,.927,.927)});
   sections.forEach((text,i)=>draw(text,40,y+7+i*14,fontSize.body,head));names.forEach((text,i)=>draw(text,40,y+7+(sections.length+i)*14,fontSize.body));
-  rates.forEach((text,i)=>centered(text,241,130,y+8+i*14,fontSize.body));quantities.forEach((text,i)=>centered(text,371,85,y+8+i*14,fontSize.body));right(invoiceMoney(line.amount),570,y+8,fontSize.body);
-  y+=height;index++;
+  rates.forEach((text,i)=>centered(text,241,130,y+8+sections.length*14+i*14,fontSize.body));quantities.forEach((text,i)=>centered(text,371,85,y+8+sections.length*14+i*14,fontSize.body));right(invoiceMoney(line.amount),570,y+8+sections.length*14,fontSize.body);
+  y+=height;
  }
  const totals=invoiceTotals(invoice,paid),totalRows=totals.received?3:1,footerHeight=totalRows*20+100+(paid?20:0);
  if(y+footerHeight>756)continuation(false);
