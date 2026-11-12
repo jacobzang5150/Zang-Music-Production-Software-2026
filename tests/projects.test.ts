@@ -5,8 +5,8 @@ const p:Project={id:'p',name:'Record',client:'Artist',type:'EP',deadline:'2026-1
 const now=new Date(2026,9,7,12);
 test('weighted completion and album average',()=>{assert.equal(songProgress(p,p.songs[0]),70);assert.equal(progress(p),35);assert.equal(progress({...p,songs:p.songs.map(s=>({...s,completed:['a','b']}))}),100)});
 test('validates weights, type constraints, dates, priority and unknown stage IDs',()=>{assert(ProjectSchema.safeParse(p).success);for(const q of [{...p,stages:[{id:'a',name:'A',weight:50}]},{...p,type:'Single'},{...p,deadline:'2026-02-30'},{...p,deadline:'2026-99-99'},{...p,priority:6},{...p,songs:[{...p.songs[0],completed:['missing']}]}])assert(!ProjectSchema.safeParse(q).success)});
-test('deadline uses calendar days and ranking excludes delivered work',()=>{assert.equal(daysLeft(p,now),3);assert.equal(score(p,now),3*(1+4*.35)/4);const done={...p,id:'done',deliveredAt:'2026-10-07T00:00:00.000Z',songs:p.songs.map(s=>({...s,completed:['a','b']}))};assert.deepEqual(rankProjects([done,p],now).map(p=>p.id),['p'])});
-test('overdue first, then priority / completion boost / deadline',()=>{const late={...p,id:'late',deadline:'2026-10-06',priority:1};const high={...p,id:'high',priority:5};const due={...p,id:'due',deadline:'2026-10-07'};assert.deepEqual(rankProjects([p,high,due,late],now).map(p=>p.id),['late','due','high','p']);assert.equal(rankProjects([{...p,id:'low',priority:1},high],now)[0].id,'high')});
+test('deadline uses calendar days and ranking excludes delivered work',()=>{assert.equal(daysLeft(p,now),3);assert.equal(score(p,now),(1+4*.35)/4);const done={...p,id:'done',deliveredAt:'2026-10-07T00:00:00.000Z',songs:p.songs.map(s=>({...s,completed:['a','b']}))};assert.deepEqual(rankProjects([done,p],now).map(p=>p.id),['p'])});
+test('overdue first, then completion and deadline; legacy ratings have no effect',()=>{const late={...p,id:'late',deadline:'2026-10-06',priority:1};const high={...p,id:'high',priority:5};const due={...p,id:'due',deadline:'2026-10-07'};assert.deepEqual(rankProjects([p,high,due,late],now).map(p=>p.id),['late','due','p','high']);assert.equal(score({...p,priority:1},now),score(high,now));assert.deepEqual(rankProjects([p,high],now).map(p=>p.id),['p','high']);assert.deepEqual(rankProjects([high,p],now).map(p=>p.id),['high','p'])});
 
 test('stage changes preserve earlier weights and total exactly 100',async()=>{
   const {adjustStageWeight,removeStage}=await import('../lib/projects.ts');
@@ -113,13 +113,13 @@ test('stage reordering preserves weights and checked progress across songs',asyn
  assert.deepEqual(adjustStageWeight(moved,1,20).map(s=>s.weight),[20,20,60]);
 });
 
-test('queue favors near-complete work while retaining priority and deadline urgency',()=>{
+test('queue favors near-complete work while retaining deadline urgency',()=>{
  const work=(id:string,percent:number,extra:Partial<Project>={}):Project=>({...p,id,stages:[{id:'done',name:'Done',weight:percent},{id:'todo',name:'Remaining',weight:100-percent}],songs:[{id:'song',name:'Song',completed:['done']}],...extra});
  const early=work('early',20),near=work('near',80),ready=work('ready',100);
  assert.deepEqual(rankProjects([early,near,ready],now).map(x=>x.id),['ready','near','early']);
  assert(score(near,now)>score(work('higher-priority-early',20,{priority:4}),now));
  assert(score(work('urgent',20,{deadline:'2026-10-07'}),now)>score(near,now));
- assert(score(work('high',80,{priority:5}),now)>score(near,now));
+ assert.equal(score(work('high',80,{priority:5}),now),score(near,now));
  assert.equal(score(ready,now),5*score(work('unstarted',0),now));
  assert.equal(rankProjects([{...ready,deliveredAt:now.toISOString()},near],now)[0].id,'near');
  for(const deadline of ['', '2026-10-06', '2026-10-10']){

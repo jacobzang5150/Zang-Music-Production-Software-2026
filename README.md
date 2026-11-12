@@ -16,19 +16,20 @@ Private music production workspace for clients, LPs, EPs and singles. React, Typ
 
 - Dark charcoal interface with red accents; client names lead cards, recommendations, project detail pages and graphs, with project/song titles secondary.
 - Production forms start with five unnamed stages weighted at 20% each. New overdubs start with Tracking (70%) and Revisions (30%). Enter the stage names and customize the weights; saved workflows are preserved when editing.
-- Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its priority and completion weighting.
+- Deadlines are optional. Undated work is labeled “No deadline,” excluded from due/overdue counts, and scored with a 30-day planning horizon while retaining its completion weighting.
 
-- New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus priority and deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
+- New overdub form for a client’s song: acoustic guitar, electric guitar, or both, plus an optional deadline. Overdubs have editable completion stages and participate in the same project list and ranked work queue.
 - Graphs workspace displays every production project and overdub as a 0–100% completion bar, including finished work. Select a bar to open its project.
 
 - Leads workspace: add, rename, search and remove potential clients by name. Leads are stored in Supabase separately from projects, with the same owner isolation and revision checks.
 
-- Project form with client, project title, release type, deadline and priority from 1–5.
+- Project form with client, project title, release type and optional deadline.
 - Track counts and names for LPs and EPs. Singles automatically use their project title as the single song name, so the form hides the track list.
 - Drag stage handles to reorder in creation/edit forms or directly within a song; keyboard users can focus a handle and press Up/Down. Order is shared across songs and saves with the project. Stage weights and checked progress stay attached.
 - Per-project completion stages and per-song checkboxes with weighted progress.
 - Stage weights adjust in 5-point steps. Increasing a stage consumes weight from stages below it, starting with the next stage. Decreasing it gives weight to the next stage. Earlier stages never change. Inputs are capped by the available weight; the final stage is an automatic remainder. Zero-weight stages are allowed. Adding a stage starts it at zero; removing a stage transfers its weight to the next stage (or the new last stage).
-- Project progress averages all songs. Work queue: overdue projects first, then descending `priority × (1 + 4 × completionFraction) / max(1, days remaining + 1)`. Completion is the project’s average song progress, with a bounded 1× boost at 0%, 3× at 50%, and 5× at 100%. Near-complete work is favored without a track-count advantage or division by zero at completion. Ties use deadline, client, then project name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.
+- Priority ratings are removed from forms, project details and cards. Legacy values remain in saved records for compatibility but do not affect the queue.
+- Project progress averages all songs. Work queue: overdue projects first, then descending `(1 + 4 × completionFraction) / max(1, days remaining + 1)`. Completion is the project’s average song progress, with a bounded 1× boost at 0%, 3× at 50%, and 5× at 100%. Near-complete work is favored without a track-count advantage or division by zero at completion. Ties use deadline, client, then project name. Projects leave the queue only when Delivered is checked. Dates use the viewer's local calendar.
 - Search, completed-project filter and revision checks to prevent silently overwriting simultaneous edits.
 
 ## Development
@@ -47,7 +48,7 @@ pnpm build
 
 Supabase project: `zegseumxuvpoypiiogjz` (Zang Music Production Software 2026).
 
-`public.studio_projects` stores all project, client, track, stage, completion, priority and deadline data as a validated JSONB document plus owner and revision. The composite owner/id primary key supports efficient owner-scoped reads. SQL setup is recorded in `supabase/schema.sql`; the deployed migration is `20261007034337_create_studio_projects` in Supabase's migration history.
+`public.studio_projects` stores all project, client, track, stage, completion and deadline data as a validated JSONB document plus owner and revision. The composite owner/id primary key supports efficient owner-scoped reads. SQL setup is recorded in `supabase/schema.sql`; the deployed migration is `20261007034337_create_studio_projects` in Supabase's migration history.
 
 The browser calls `/api/projects`. Sites supplies verified ChatGPT identity. The server signs short-lived, audience-bound RS256 requests including the owner and complete operation payload. Supabase's `studio-data` Edge Function verifies the signature, validates the project and scopes every database request to that owner. Stale updates and deletes return HTTP 409.
 
