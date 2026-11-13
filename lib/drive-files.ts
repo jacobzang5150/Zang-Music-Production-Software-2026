@@ -65,9 +65,14 @@ export class DriveApi{
   try{return await (await this.request('files?supportsAllDrives=true&fields='+encodeURIComponent(DRIVE_FIELDS),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,name:trimmed,mimeType:DRIVE_FOLDER,parents:[parent.id]})})).json() as DriveFile}
   catch(e){if(e instanceof DriveError&&e.status===409)return this.get(id);throw e}
  }
- async trashFolder(file:DriveFile){
-  if(file.mimeType!==DRIVE_FOLDER||file.capabilities?.canTrash!==true)throw new DriveError('This folder cannot be moved to Trash by this account.');
+ /** Deletion is recoverable: move files or folders to Google Drive Trash. */
+ async trash(file:DriveFile){
+  if(file.capabilities?.canTrash!==true)throw new DriveError('This item cannot be moved to Trash by this account.');
   await this.request('files/'+encodeURIComponent(file.id)+'?supportsAllDrives=true',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
+ }
+ async trashFolder(file:DriveFile){
+  if(file.mimeType!==DRIVE_FOLDER)throw new DriveError('This item is not a folder.');
+  await this.trash(file);
  }
  async rename(id:string,name:string){return (await this.request('files/'+encodeURIComponent(id)+'?supportsAllDrives=true&fields='+encodeURIComponent(DRIVE_FIELDS),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})).json() as Promise<DriveFile>}
  /** Move only a file into a direct subfolder of its current folder. Re-read both

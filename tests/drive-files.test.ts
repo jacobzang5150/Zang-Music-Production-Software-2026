@@ -133,3 +133,19 @@ test('a new upload uses the selected drop folder as its only parent',async()=>{
   const result=await new DriveApi('test').upload(new File(['audio'],'Take.wav',{type:'audio/wav'}),'selected-subfolder',()=>{},new AbortController().signal);assert.deepEqual(result.parents,['selected-subfolder']);
  }finally{globalThis.fetch=real}
 });
+
+test('file deletion moves to recoverable Trash and honors permissions',async()=>{
+ const real=globalThis.fetch;const writes:{url:URL;init?:RequestInit}[]=[];
+ try{
+  globalThis.fetch=async(input,init)=>{writes.push({url:new URL(String(input)),init});return Response.json({id:'audio-file',trashed:true})};
+  const api=new DriveApi('test'),file={id:'audio-file',name:'Take.wav',mimeType:'audio/wav',capabilities:{canTrash:true}};
+  await api.trash(file);
+  assert.equal(writes.length,1);assert.equal(writes[0].url.pathname,'/drive/v3/files/audio-file');assert.equal(writes[0].url.searchParams.get('supportsAllDrives'),'true');assert.equal(writes[0].init?.method,'PATCH');assert.deepEqual(JSON.parse(String(writes[0].init?.body)),{trashed:true});
+  await assert.rejects(api.trash({...file,capabilities:{canTrash:false}}),/cannot be moved/);
+  await assert.rejects(api.trash({...file,capabilities:undefined}),/cannot be moved/);assert.equal(writes.length,1);
+ }finally{globalThis.fetch=real}
+});
+test('failed file deletion propagates Google errors without retrying a destructive request',async()=>{
+ const real=globalThis.fetch;let calls=0;
+ try{globalThis.fetch=async()=>{calls++;return Response.json({error:{message:'Permission denied'}},{status:403})};await assert.rejects(new DriveApi('test').trash({id:'file',name:'Mix.wav',mimeType:'audio/wav',capabilities:{canTrash:true}}),/Permission denied/);assert.equal(calls,1)}finally{globalThis.fetch=real}
+});
