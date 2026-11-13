@@ -1,14 +1,15 @@
 export const workspaceViews=['Projects','Work queue','Leads','Graphs'] as const;
 export type WorkspaceView=typeof workspaceViews[number];
 export type WorkspaceRoute={view:WorkspaceView;selected:string|null};
-const slugs:Record<WorkspaceView,string>={'Projects':'projects','Work queue':'queue','Leads':'leads','Graphs':'graphs'};
+export const workspaceLabels:Record<WorkspaceView,string>={'Projects':'Home','Work queue':'Queue','Leads':'Leads','Graphs':'Graphs'};
+const slugs:Record<WorkspaceView,string>={'Projects':'home','Work queue':'queue','Leads':'leads','Graphs':'graphs'};
 export function routeHash(route:WorkspaceRoute){
  const project=(route.view==='Projects'||route.view==='Work queue')&&route.selected;
  return '#/'+slugs[route.view]+(project?'/'+encodeURIComponent(project):'');
 }
 export function readRoute(hash:string):WorkspaceRoute{
  const [slug,id]=hash.replace(/^#\/?/,'').split('/');
- const view=workspaceViews.find(v=>slugs[v]===slug)||'Projects';
+ const view=slug==='projects'?'Projects':workspaceViews.find(v=>slugs[v]===slug)||'Work queue';
  let selected:string|null=null;
  if(id&&(view==='Projects'||view==='Work queue'))try{selected=decodeURIComponent(id)}catch{}
  return {view,selected};

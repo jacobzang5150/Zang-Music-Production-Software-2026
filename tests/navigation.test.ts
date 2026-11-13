@@ -24,7 +24,7 @@ test('workspace routes round-trip including project and overdub IDs',()=>{
  }
  const route={view:'Projects' as const,selected:'id /?&#'};
  assert.deepEqual(readRoute(routeHash(route)),route);
- assert.deepEqual(readRoute('#/unknown'),{view:'Projects',selected:null});
+ assert.deepEqual(readRoute('#/unknown'),{view:'Work queue',selected:null});
  assert.deepEqual(readRoute('#/projects/%bad'),{view:'Projects',selected:null});
 });
 test('Back and Forward restore tabs and project detail without adding history entries',()=>{
@@ -58,4 +58,13 @@ test('refresh restores a deep link and canceled navigation preserves the form pa
  const refreshed=connectWorkspaceHistory(host,r=>current=r);
  assert.equal((current as WorkspaceRoute).selected,'overdub-one');
  refreshed.dispose();
+});
+
+test('startup opens Queue while Home and legacy project deep links remain available',()=>{
+ for(const hash of ['', '#', '#/'])assert.deepEqual(readRoute(hash),{view:'Work queue',selected:null});
+ assert.deepEqual(readRoute('#/home'),{view:'Projects',selected:null});assert.equal(routeHash({view:'Projects',selected:null}),'#/home');
+ assert.deepEqual(readRoute('#/projects/old-project'),{view:'Projects',selected:'old-project'});
+ const {host,stack}=browser('');let current!:WorkspaceRoute;
+ const controller=connectWorkspaceHistory(host,r=>current=r);assert.equal(current.view,'Work queue');assert.equal(host.location.hash,'#/queue');
+ controller.navigate({view:'Projects',selected:null});assert.equal(host.location.hash,'#/home');assert.equal(current.view,'Projects');host.history.go(-1);assert.equal(current.view,'Work queue');host.history.go(1);assert.equal(current.view,'Projects');assert.equal(stack.length,2);controller.dispose();
 });

@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {connectWorkspaceHistory,type WorkspaceRoute} from '@/lib/navigation';
 
 export function useWorkspaceNavigation(beforeBackOrForward:()=>boolean){
- const [route,setRoute]=useState<WorkspaceRoute>({view:'Projects',selected:null});
+ const [route,setRoute]=useState<WorkspaceRoute>({view:'Work queue',selected:null});
  const controller=useRef<ReturnType<typeof connectWorkspaceHistory>|null>(null);
  const guard=useRef(beforeBackOrForward);guard.current=beforeBackOrForward;
  useEffect(()=>{

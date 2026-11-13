@@ -181,3 +181,7 @@ Supabase assigns random, non-repeating four-digit numbers (1000–9999) atomical
 ## Completion stage deadlines
 
 Each stage optionally stores an ISO UTC deadline (`stages[].deadline`). Use the three-dot button to the right of its percentage control to add, edit, or remove its local date and time in the project/overdub form. Dates move with the stage when reordered. The workspace shows a recommended-project card and, when applicable, a separate countdown for the earliest unfinished stage. A stage remains unfinished until every song has checked it off. Overdue dates remain visible; delivered and held projects are excluded. The countdown refreshes each minute, and clicking either card opens its project. Existing projects require no data migration. The signed gateway must use the updated ProjectSchema so deadlines are preserved in Supabase JSONB.
+
+## Home and Queue navigation
+
+The Projects workspace is displayed as Home (`#/home`), and Work queue is displayed as Queue (`#/queue`). Fresh visits without a workspace hash start on Queue. The Session logo opens Home. Explicit deep links and browser back/forward remain supported, including older `#/projects/...` links. Recommended project and stage deadline cards appear only on Queue.
