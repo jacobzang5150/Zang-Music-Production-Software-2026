@@ -43,9 +43,9 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   let r=await call('clients','save',{project:{id:'ignored',name:'Artist'},revision:0});assert.equal(r.status,200);const client=r.data;
   r=await call('clients','save',{project:{id:'other',name:' artist '},revision:0});assert.equal(r.data.id,client.id);assert.equal(tables.studio_clients.length,1);
   r=await call('clients','list',{},'owner-b');assert.deepEqual(r.data,[]);
-  const draft=newOverdub();draft.name='Song';draft.client=client.name;draft.clientId=client.id;draft.songs[0].name='Song';
+  const draft=newOverdub();draft.name='Song';draft.client=client.name;draft.clientId=client.id;draft.songs[0].name='Song';draft.stages[0].deadline='2026-11-14T18:00:00.000Z';
   r=await call('projects','save',{project:draft,revision:0},'owner-b');assert.equal(r.status,400);
-  r=await call('projects','save',{project:draft,revision:0});assert.equal(r.status,200);let project=r.data;
+  r=await call('projects','save',{project:draft,revision:0});assert.equal(r.status,200);let project=r.data;assert.equal(project.stages[0].deadline,draft.stages[0].deadline);
   assert.equal(tables.studio_budgets.length,1);
   let budget=await call('budgets','list',{id:project.id});assert.equal(budget.data[0].revision,1);const workbook=budget.data[0];
   budget=await call('budgets','list',{id:project.id},'owner-b');assert.equal(budget.status,404);
