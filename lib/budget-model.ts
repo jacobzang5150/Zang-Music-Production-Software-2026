@@ -14,6 +14,7 @@ export function sectionTotal(rows:BudgetLine[]){return rows.reduce((c,row)=>c+Ma
 export function budgetTotal(model:BudgetModel){return model.sections.reduce((c,s)=>c+Math.round(sectionTotal(s.rows)*100),0)/100}
 
 export function budgetRemaining(model:BudgetModel){return model.estimate===null?null:Math.round((model.estimate-budgetTotal(model))*100)/100}
+export function budgetRemainingHours(model:BudgetModel){const remaining=budgetRemaining(model);return remaining===null?null:remaining/80}
 export function groupBudgetRows(rows:BudgetLine[]){
  const parents=new Map(rows.filter(row=>row.dropdown===true&&!row.parentId).map(row=>[row.id,row]));
  return rows.filter(row=>!row.parentId||!parents.has(row.parentId)).map(row=>({id:row.id,name:row.name,dropdown:row.dropdown===true,rows:parents.has(row.id)?rows.filter(item=>item.id===row.id||item.parentId===row.id):[row]}));
