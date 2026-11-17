@@ -1,10 +1,12 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {X,Folder,Music2,FileText,Upload,RefreshCw,ChevronRight,ArrowLeft,Pencil,Download,ExternalLink,LogOut,FolderOpen,Trash2,FolderPlus,Copy} from 'lucide-react';
+import {X,Folder,Music2,FileText,Upload,RefreshCw,ChevronRight,ArrowLeft,ArrowRight,Pencil,Download,ExternalLink,LogOut,FolderOpen,Trash2,FolderPlus,Copy} from 'lucide-react';
 import {DriveApi,DriveError,DRIVE_FOLDER,parseDriveLink,driveFileUrl,isAudio,isText,readableSize,type DriveFile} from '@/lib/drive-files';
 import {prepareDrive,connectDrive,currentDriveToken,forgetDriveToken,disconnectDrive,restoreDriveConnection,pickDriveFolder,type DriveConfig} from '@/lib/google-drive-browser';
 
+import {connectDriveHistory} from '@/lib/drive-history';
+import {DriveUploadQueue} from '@/lib/drive-upload-queue';
 import {uploadBatchPercent} from '@/lib/drive-upload-progress';
 
 type Media={file:DriveFile;url?:string;text?:string};
@@ -24,6 +26,11 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
  const operationRef=useRef(false),pickerRef=useRef(false),alive=useRef(true),request=useRef(0),dragDepth=useRef(0);
  const readController=useRef<AbortController|null>(null),writeController=useRef<AbortController|null>(null),mediaController=useRef<AbortController|null>(null),objectUrl=useRef<string|null>(null);
  const folder=trail.at(-1);
+ const driveHistory=useRef<ReturnType<typeof connectDriveHistory>|null>(null);
+ const [canBack,setCanBack]=useState(false),[canForward,setCanForward]=useState(false);
+ const uploadQueue=useRef<DriveUploadQueue|null>(null);
+ const uploadAccepting=!!token&&(!operation||!!uploadBatch&&!uploadBatch.replacing)&&!picking;
+ const navRef=useRef<(path:DriveFile[])=>void>(()=>{});navRef.current=path=>{void listFolder(path.at(-1)!,path,undefined,true)};
  const navigationBusy=(!!operation&&(!uploadBatch||uploadBatch.replacing))||picking;
  const busy=!!operation||loading||mediaLoading||picking;
  const view=useRef({folder,trail,media});view.current={folder,trail,media};
@@ -48,7 +55,7 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   };
   const leaving=(e:BeforeUnloadEvent)=>{if(operationRef.current||dirtyRef.current){e.preventDefault();e.returnValue=''}};
   document.addEventListener('keydown',key,true);window.addEventListener('beforeunload',leaving);
-  return()=>{alive.current=false;request.current++;readController.current?.abort();writeController.current?.abort();mediaController.current?.abort();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);document.body.style.overflow=overflow;document.removeEventListener('keydown',key,true);window.removeEventListener('beforeunload',leaving);previous?.focus()};
+  return()=>{alive.current=false;request.current++;readController.current?.abort();writeController.current?.abort();uploadQueue.current?.cancel();mediaController.current?.abort();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);document.body.style.overflow=overflow;document.removeEventListener('keydown',key,true);window.removeEventListener('beforeunload',leaving);previous?.focus()};
  },[]);
  useEffect(()=>{
   const renamed=(event:Event)=>{
@@ -59,11 +66,19 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   window.addEventListener('session-drive-name-synced',renamed);
   return()=>window.removeEventListener('session-drive-name-synced',renamed);
  },[]);
+ useEffect(()=>{
+  const history=connectDriveHistory(window,path=>navRef.current(path),()=>closeRef.current(),()=>!dirtyRef.current||confirm('Discard unsaved file edits?'),(back,forward)=>{setCanBack(back);setCanForward(forward)});
+  driveHistory.current=history;
+  const mouse=(e:MouseEvent)=>{if(e.button!==3&&e.button!==4)return;e.preventDefault();e.stopImmediatePropagation();if(e.type==='mousedown'){if(e.button===3)history.back();else history.forward()}};
+  window.addEventListener('mousedown',mouse,true);window.addEventListener('mouseup',mouse,true);window.addEventListener('auxclick',mouse,true);
+  return()=>{history.dispose();driveHistory.current=null;window.removeEventListener('mousedown',mouse,true);window.removeEventListener('mouseup',mouse,true);window.removeEventListener('auxclick',mouse,true)};
+ },[]);
  async function setup(){setConfigLoading(true);setError('');try{const c=await prepareDrive();if(alive.current)setConfig(c)}catch(e){if(alive.current)setError((e as Error).message)}finally{if(alive.current)setConfigLoading(false)}}
  useEffect(()=>{void setup();const auth=()=>setToken(currentDriveToken());window.addEventListener('session-drive-auth',auth);void restoreDriveConnection();return()=>window.removeEventListener('session-drive-auth',auth)},[]);
  function failure(e:unknown){if(!alive.current||(e as Error).name==='AbortError')return;if(e instanceof DriveError&&e.status===401){forgetDriveToken();setToken(null);void restoreDriveConnection()}setError((e as Error).message||'Something went wrong. Please retry.')}
- async function listFolder(target:DriveFile,path:DriveFile[],more?:string){
+ async function listFolder(target:DriveFile,path:DriveFile[],more?:string,fromHistory=false){
   if(!api.current)return;readController.current?.abort();const controller=new AbortController();readController.current=controller;const seq=++request.current;
+  if(!more&&!fromHistory)driveHistory.current?.record(path);
   setLoading(true);setError('');if(!more){clearMedia();setFiles([]);setTrail(path);setNextPage(undefined);setQuery('')}
   try{const result=await api.current.list(target.id,more,controller.signal);if(seq!==request.current||!alive.current)return;setFiles(prev=>more?[...prev,...result.files]:result.files);setNextPage(result.nextPageToken)}catch(e){if(seq===request.current&&!controller.signal.aborted)failure(e)}finally{if(seq===request.current&&alive.current)setLoading(false)}
  }
@@ -87,7 +102,7 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
      root.parents?.[0]?client.get(root.parents[0],controller.signal).catch(()=>null):Promise.resolve(null)
     ]);
     if(seq!==request.current||!alive.current)return;
-    if(parent&&parent.mimeType===DRIVE_FOLDER&&!parent.trashed&&parent.id!==root.id)setTrail([parent,root]);
+    const initialPath=parent&&parent.mimeType===DRIVE_FOLDER&&!parent.trashed&&parent.id!==root.id?[parent,root]:[root];setTrail(initialPath);driveHistory.current?.record(initialPath);
     setFiles(result.files);setNextPage(result.nextPageToken)
    }else setFiles([root]);
    setNotice('');
@@ -115,7 +130,25 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   }catch(e){failure(e)}finally{if(mediaController.current===controller&&alive.current)setMediaLoading(false)}
  }
  async function transfer(selected:File[],target?:DriveFile,destination=folder){
-  if(!api.current||operationRef.current||!selected.length||!target&&!destination)return;
+  if(!api.current||!selected.length||!target&&!destination)return;
+  if(!target){
+   if(operationRef.current&&!uploadQueue.current?.running)return;
+   const client=api.current;
+   if(!uploadQueue.current)uploadQueue.current=new DriveUploadQueue(state=>{
+    if(!alive.current)return;
+    operationRef.current=state.active;
+    setOperation(state.active?'Uploading '+state.name:'');setPercent(state.percent);
+    setUploadBatch(state.active?{total:state.total,completed:state.completed,replacing:false}:null);
+    if(!state.active)setNotice(`${state.completed-state.failed} files uploaded${state.failed?`; ${state.failed} failed`:''}.`);
+   },failure,job=>{
+    if(!alive.current)return;const current=view.current;
+    if(current.folder?.id===job.destination.id&&!current.media)void listFolder(current.folder,current.trail);
+   });
+   setError('');setNotice('');
+   uploadQueue.current.add(selected.map(file=>({file,destination:destination!,run:(progress,signal)=>client.upload(file,destination!.id,progress,signal)})));
+   return;
+  }
+  if(operationRef.current)return;
   // Capture the upload destination and client once; browsing never redirects a batch.
   const client=api.current,sizes=selected.map(file=>file.size);
   operationRef.current=true;const controller=new AbortController();writeController.current=controller;
@@ -161,7 +194,7 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   await transfer([new File([textDraft],media.file.name,{type:media.file.mimeType||'text/plain'})],media.file);
  }
  function clearDrag(){dragDepth.current=0;setDragging(false);setDropFolder(null);setDragFile(null);draggedFile.current=null;dragImage.current?.remove();dragImage.current=null}
- function acceptsDrop(target:DriveFile){return !!token&&!busy&&!rename&&!creatingFolder&&!replacement&&target.mimeType===DRIVE_FOLDER&&target.capabilities?.canAddChildren===true}
+ function acceptsDrop(target:DriveFile){return uploadAccepting&&!rename&&!creatingFolder&&!replacement&&target.mimeType===DRIVE_FOLDER&&target.capabilities?.canAddChildren===true}
  function startFileDrag(e:React.DragEvent,file:DriveFile){
   if(busy||!folder||file.mimeType===DRIVE_FOLDER||file.capabilities?.canMoveItemWithinDrive!==true||(e.target as HTMLElement).closest('.drive-icon-action')){e.preventDefault();return}
   draggedFile.current=file;setDragFile(file.id);setDropFolder(null);
@@ -179,7 +212,7 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
  function drop(e:React.DragEvent,target=folder){
   e.preventDefault();e.stopPropagation();const file=draggedFile.current;clearDrag();
   if(!target||!acceptsDrop(target))return;
-  if(file){if(target.id!==folder?.id)void moveFile(file,target);return}
+  if(file){if(operationRef.current)return;if(target.id!==folder?.id)void moveFile(file,target);return}
   if(!e.dataTransfer.types.includes('Files'))return;
   const items=Array.from(e.dataTransfer.items);if(items.some(item=>item.webkitGetAsEntry?.()?.isDirectory)){setError('Drop files rather than folders.');return}
   void transfer(Array.from(e.dataTransfer.files),undefined,target);
@@ -194,9 +227,9 @@ export default function DriveWindow({url,onClose,onLinkChange,managed=false,sync
   <div className="drive-window-head"><div><div className="eyebrow">SESSION FILES</div><h2 id="drive-title">Google Drive</h2></div><div className="drive-window-head-actions"><button type="button" className="drive-icon-action" aria-label="Copy Drive link" title="Copy Drive link" disabled={!folder&&!url} onClick={async()=>{try{await navigator.clipboard.writeText(folder?driveFileUrl(folder):url);setNotice('Folder link copied.')}catch{setError('Could not copy the folder link. Please allow clipboard access and try again.')}}}><Copy size={18}/></button>{token&&<button type="button" className="drive-icon-action" aria-label="Disconnect and forget Google Drive" title="Disconnect and forget Google Drive" disabled={busy||connecting} onClick={async()=>{setConnecting(true);try{await disconnectDrive();api.current=null;setToken(null);setFiles([]);setTrail([]);clearMedia()}catch(e){failure(e)}finally{setConnecting(false)}}}><LogOut size={18}/></button>}<button ref={closeButton} type="button" className="drive-icon-action" aria-label="Close Google Drive" onClick={close}><X size={22}/></button></div></div>
   {error&&<div className="drive-error" role="alert">{error}</div>}
   {!token?<div className="drive-connect"><FolderOpen size={54}/><h3>Your project files, right here.</h3><p>Connect the Google account that holds your deliverables to browse folders, upload files, and listen to audio.</p><p className="drive-consent">Google will ask for access to view and manage your Drive files. Session creates Client / Project / EDITS, MIXES, MASTERS folders once for projects without a Drive link. Deleted folders stay deleted. Project folders are shared as Anyone with the link — Viewer. Other file changes happen when you upload, move, rename, replace, or save an edit. {config?.rememberConnection?'Your connection is remembered securely so you won’t need to reconnect on each visit. Use Disconnect to forget it.':'Your Google access token stays in this browser session.'}</p><button className="primary" disabled={!config||connecting} onClick={connect}>{connecting?'Connecting…':configLoading?'Loading Google…':'Connect Google Drive'}</button>{!config&&!configLoading&&<button className="secondary" onClick={setup}>Retry setup</button>}</div>:<>
-  <div className="drive-toolbar"><div className="drive-breadcrumbs">{media?<button onClick={()=>{if(!mediaDirty||confirm('Discard unsaved file edits?'))clearMedia()}}><ArrowLeft size={16}/> Files</button>:trail.length?trail.map((part,index)=><span key={part.id}>{index>0&&<ChevronRight size={13}/>}<button disabled={navigationBusy} aria-current={index===trail.length-1?'location':undefined} onClick={()=>listFolder(part,trail.slice(0,index+1))}>{part.name}</button></span>):<span>Project files</span>}</div><div className="drive-tool-actions">{!managed&&<button className="secondary" disabled={busy||!config} onClick={chooseFolder}><FolderOpen size={15}/> Change folder</button>}{folder&&<button className="secondary" disabled={navigationBusy} onClick={()=>listFolder(folder,trail)} aria-label="Refresh folder"><RefreshCw size={16}/></button>}<button className="secondary" disabled={busy||!folder?.capabilities?.canAddChildren} onClick={()=>{newFolderId.current=null;setFolderName('');setCreatingFolder(true);setError('')}}><FolderPlus size={15}/> Create folder</button><button className="primary" disabled={busy||!folder?.capabilities?.canAddChildren} onClick={()=>uploadInput.current?.click()}><Upload size={15}/> Upload</button><input ref={uploadInput} type="file" multiple hidden onChange={e=>{const selected=Array.from(e.target.files||[]);e.target.value='';void transfer(selected)}}/></div></div>
+  <div className="drive-toolbar"><div className="drive-history-buttons"><button type="button" className="drive-icon-action" aria-label="Back in Google Drive" disabled={!canBack||navigationBusy} onClick={()=>driveHistory.current?.back()}><ArrowLeft size={18}/></button><button type="button" className="drive-icon-action" aria-label="Forward in Google Drive" disabled={!canForward||navigationBusy} onClick={()=>driveHistory.current?.forward()}><ArrowRight size={18}/></button></div><div className="drive-breadcrumbs">{media?<button onClick={()=>{if(!mediaDirty||confirm('Discard unsaved file edits?'))clearMedia()}}><ArrowLeft size={16}/> Files</button>:trail.length?trail.map((part,index)=><span key={part.id}>{index>0&&<ChevronRight size={13}/>}<button disabled={navigationBusy} aria-current={index===trail.length-1?'location':undefined} onClick={()=>listFolder(part,trail.slice(0,index+1))}>{part.name}</button></span>):<span>Project files</span>}</div><div className="drive-tool-actions">{!managed&&<button className="secondary" disabled={busy||!config} onClick={chooseFolder}><FolderOpen size={15}/> Change folder</button>}{folder&&<button className="secondary" disabled={navigationBusy} onClick={()=>listFolder(folder,trail)} aria-label="Refresh folder"><RefreshCw size={16}/></button>}<button className="secondary" disabled={busy||!folder?.capabilities?.canAddChildren} onClick={()=>{newFolderId.current=null;setFolderName('');setCreatingFolder(true);setError('')}}><FolderPlus size={15}/> Create folder</button><button className="primary" disabled={!uploadAccepting||!folder?.capabilities?.canAddChildren} onClick={()=>uploadInput.current?.click()}><Upload size={15}/> Upload</button><input ref={uploadInput} type="file" multiple hidden onChange={e=>{const selected=Array.from(e.target.files||[]);e.target.value='';void transfer(selected)}}/></div></div>
   {syncMessage&&<p className="drive-notice drive-background-status" role="status">{syncMessage}</p>}{syncError&&<div className="drive-error" role="alert">{syncError} <button className="secondary" disabled={!!syncMessage} onClick={onRetry}>Retry folder setup</button></div>}{notice&&<p className="drive-notice" role="status">{notice}</p>}
-  {operation&&<div className="drive-transfer" role="status"><span>{operation}</span>{operation.startsWith('Uploading')||operation.startsWith('Replacing')?<><progress aria-label="Overall upload progress" max={100} value={percent}/>{uploadBatch&&<span>{uploadBatch.completed} of {uploadBatch.total} files</span>}<span>{percent}%</span><button className="secondary" onClick={()=>writeController.current?.abort()}>Cancel</button></>:null}</div>}
+  {operation&&<div className="drive-transfer" role="status"><span>{operation}</span>{operation.startsWith('Uploading')||operation.startsWith('Replacing')?<><progress aria-label="Overall upload progress" max={100} value={percent}/>{uploadBatch&&<span>{uploadBatch.completed} of {uploadBatch.total} files</span>}<span>{percent}%</span><button className="secondary" onClick={()=>{if(uploadQueue.current?.running)uploadQueue.current.cancel();else writeController.current?.abort()}}>Cancel</button></>:null}</div>}
   {media?<div className="drive-file-preview"><div className="drive-file-heading"><div><h3>{media.file.name}</h3><span>{readableSize(media.file.size)}</span></div><div><button className="secondary" disabled={busy||!media.file.capabilities?.canEdit} onClick={()=>{setRename(media.file);setName(media.file.name)}}><Pencil size={14}/> Rename</button><button type="button" className="secondary" disabled={busy||!media.file.capabilities?.canTrash} onClick={()=>void trashFile(media.file)}><Trash2 size={14}/> Delete file</button><a className="secondary" href={driveFileUrl(media.file)} target="_blank" rel="noopener noreferrer"><ExternalLink size={14}/> Open in Google</a></div></div>
    {mediaLoading?<div className="drive-empty">Loading file…</div>:media.url?<div className="drive-audio"><Music2 size={56}/><audio key={media.url} controls preload="metadata" src={media.url} onError={()=>setError('Your browser cannot play this audio format. Open it in Google Drive or download the file.')} aria-label={'Play '+media.file.name}/><a className="secondary" href={media.url} download={media.file.name}><Download size={16}/> Download</a></div>:media.text!==undefined?<div className="drive-text-editor"><textarea aria-label={'Edit '+media.file.name} value={textDraft} readOnly={!media.file.capabilities?.canEdit} disabled={!!operation} onChange={e=>setTextDraft(e.target.value)}/><button className="primary" disabled={busy||!mediaDirty||!media.file.capabilities?.canEdit} onClick={saveText}>Save file changes</button></div>:<><iframe title={'Preview '+media.file.name} src={'https://drive.google.com/file/d/'+encodeURIComponent(media.file.id)+'/preview'+(media.file.resourceKey?'?resourcekey='+encodeURIComponent(media.file.resourceKey):'')} allow="autoplay; fullscreen" referrerPolicy="strict-origin-when-cross-origin"/><p className="drive-preview-hint">If Google cannot preview this file, use Open in Google. Google Docs and Sheets use Google’s own editors.</p></>}
    {!media.file.mimeType.startsWith('application/vnd.google-apps.')&&media.file.capabilities?.canEdit&&<div className="drive-replace"><button className="secondary" disabled={busy} onClick={()=>replaceInput.current?.click()}>Replace file contents</button><input ref={replaceInput} type="file" hidden onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)setReplacement({target:media.file,file})}}/>{replacement&&<div><p>Replace the contents of <strong>{replacement.target.name}</strong> with <strong>{replacement.file.name}</strong>?</p><button className="secondary" disabled={busy} onClick={()=>setReplacement(null)}>Cancel</button><button className="primary" disabled={busy} onClick={()=>transfer([replacement.file],replacement.target)}>Replace contents</button></div>}</div>}
