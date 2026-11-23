@@ -31,6 +31,16 @@ Deno.serve(async(req:Request)=>{
       if(!r.ok)throw new Error('Client save failed');const inserted=await r.json();if(inserted.length)return {...inserted[0].data,revision:inserted[0].revision};
       const find=base();find.set('name_key','eq.'+name.trim().toLowerCase());const rows=await getRows('studio_clients',find);if(!rows.length)throw new Error('Client lookup failed');return {...rows[0].data,revision:rows[0].revision};
     }
+    if(resource==='history'){
+      if(claims.action!=='list')return reply({error:'History is read-only'},405);
+      if(claims.id!==undefined&&(typeof claims.id!=='string'||!claims.id||claims.id.length>80))return reply({error:'Invalid project'},400);
+      if(claims.historyCursor!==undefined&&(typeof claims.historyCursor!=='string'||!(/^[1-9][0-9]{0,17}$/).test(claims.historyCursor)))return reply({error:'Invalid history cursor'},400);
+      const q=base();q.set('select','id,project_id,client_name,project_name,song_id,song_name,stage_id,stage_name,checked_at');q.set('order','id.desc');q.set('limit','101');
+      if(claims.id)q.set('project_id','eq.'+claims.id);
+      if(claims.historyCursor)q.set('id','lt.'+claims.historyCursor);
+      const rows=await getRows('studio_completion_history',q),items=rows.slice(0,100).map((r:any)=>({id:String(r.id),projectId:r.project_id,client:r.client_name,project:r.project_name,songId:r.song_id,song:r.song_name,stageId:r.stage_id,stage:r.stage_name,checkedAt:r.checked_at}));
+      return reply({items,nextCursor:rows.length>100?items.at(-1)?.id:null});
+    }
     if(resource==='invoices'){
       const q=base();
       if(claims.action==='list'){

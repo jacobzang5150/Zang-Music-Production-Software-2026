@@ -10,7 +10,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
  const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
  const privateKey=await crypto.subtle.exportKey('jwk',pair.privateKey),publicKey=await crypto.subtle.exportKey('jwk',pair.publicKey);
  let handler:(r:Request)=>Promise<Response>;const g=globalThis as any,oldDeno=g.Deno,oldFetch=globalThis.fetch;
- const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[],studio_drive_auth:[],studio_budgets:[],studio_invoices:[]};
+ const tables:Record<string,any[]>={studio_clients:[],studio_projects:[],studio_leads:[],studio_drive_folders:[],studio_drive_auth:[],studio_budgets:[],studio_invoices:[],studio_completion_history:[]};
  g.__gatewayTestKey=publicKey;g.Deno={env:{get:(k:string)=>({SUPABASE_URL:'https://test.invalid',SUPABASE_SECRET_KEYS:'{"default":"sb_secret_test"}'} as Record<string,string>)[k]},serve:(h:typeof handler)=>{handler=h}};
  globalThis.fetch=async(input:any,options:any={})=>{
   const url=new URL(String(input)),table=url.pathname.split('/').at(-1)!;
@@ -26,6 +26,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   }
   let rows=tables[table];assert(rows,table);
   const query=url.searchParams;const matches=(r:any)=>[...query].every(([k,v])=>!v.startsWith('eq.')||String(k==='name_key'?r.data.name.trim().toLowerCase():r[k])===v.slice(3));
+  if(table==='studio_completion_history'){assert.equal(query.get('owner')?.startsWith('eq.'),true);assert.equal(query.get('order'),'id.desc');assert.equal(query.get('limit'),'101');if(query.has('id'))assert.match(query.get('id')!,/^lt\.[0-9]+$/);return Response.json(rows.filter(matches).filter(r=>!query.has('id')||r.id<Number(query.get('id')!.slice(3))).sort((a,b)=>b.id-a.id).slice(0,101))}
   if((options.method||'GET')==='GET')return Response.json(rows.filter(matches).slice(Number(query.get('offset')||0),Number(query.get('offset')||0)+Number(query.get('limit')||1000)));
   const body=options.body?JSON.parse(options.body):null;
   if(options.method==='POST'){const conflict=rows.find(r=>r.owner===body.owner&&(r.id===body.id||(table==='studio_clients'&&r.data.name.trim().toLowerCase()===body.data.name.trim().toLowerCase())));if(conflict)return String(options.headers.Prefer).includes('ignore-duplicates')?Response.json([]):Response.json({error:'Duplicate'},{status:409});rows.push(body);return Response.json([body]);}
@@ -37,9 +38,16 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   let source=await readFile(new URL('supabase/functions/studio-data/index.ts',root),'utf8');
   source=source.replace("import publicKey from './public-key.json' with {type:'json'};",'const publicKey=globalThis.__gatewayTestKey;').replaceAll("'../../../lib/","'../lib/");
   await mkdir(new URL('.sites-runtime/',root),{recursive:true});await writeFile(file,ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText);await import(file.href);
-  async function call(resource:'projects'|'clients'|'folders'|'driveAuth'|'budgets'|'invoices',action:'list'|'save'|'import'|'delete',extra:Record<string,unknown>={},owner='owner-a'){
+  async function call(resource:'projects'|'clients'|'folders'|'driveAuth'|'budgets'|'invoices'|'history',action:'list'|'save'|'import'|'delete',extra:Record<string,unknown>={},owner='owner-a'){
    const token=await signGatewayRequest(privateKey,{owner,resource,action,...extra});const response=await handler(new Request('https://edge.invalid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}));return {status:response.status,data:await response.json() as any};
   }
+  tables.studio_completion_history=Array.from({length:102},(_,i)=>({id:i+1,owner:'owner-a',project_id:i%2?'p1':'p2',client_name:'Artist',project_name:'Record',song_id:'song',song_name:'Song',stage_id:'stage',stage_name:'Tracking',checked_at:'2026-11-23T00:00:00Z'}));
+  const history=await call('history','list');assert.equal(history.data.items.length,100);assert.equal(history.data.nextCursor,'3');assert.equal(history.data.items[0].id,'102');
+  const older=await call('history','list',{historyCursor:history.data.nextCursor});assert.equal(older.data.items.length,2);assert.equal(older.data.nextCursor,null);
+  const scoped=await call('history','list',{id:'p1'});assert(scoped.data.items.every((e:any)=>e.projectId==='p1'));
+  assert.equal((await call('history','list',{},'owner-b')).data.items.length,0);
+  assert.equal((await call('history','list',{historyCursor:'1,or(owner.eq.other)'})).status,400);
+  assert.equal((await call('history','save')).status,405);
   let r=await call('clients','save',{project:{id:'ignored',name:'Artist'},revision:0});assert.equal(r.status,200);const client=r.data;
   r=await call('clients','save',{project:{id:'other',name:' artist '},revision:0});assert.equal(r.data.id,client.id);assert.equal(tables.studio_clients.length,1);
   r=await call('clients','list',{},'owner-b');assert.deepEqual(r.data,[]);
