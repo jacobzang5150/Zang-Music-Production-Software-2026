@@ -6,7 +6,7 @@ type Entry={id:string;projectId:string;client:string;project:string;songId:strin
 type Page={items:Entry[];nextCursor:string|null;error?:string};
 export default function CompletionHistory({projects,currentProjectId}:{projects:Project[];currentProjectId?:string}){
  const [open,setOpen]=useState(false);
- return <><button type="button" className="history-trigger" aria-haspopup="dialog" onClick={()=>setOpen(true)}><History size={18}/><span>History</span></button>{open&&<HistoryWindow projects={projects} currentProjectId={currentProjectId} onClose={()=>setOpen(false)}/>}</>;
+ return <><button type="button" className="history-trigger" aria-label="History" title="History" aria-haspopup="dialog" onClick={()=>setOpen(true)}><History size={18}/></button>{open&&<HistoryWindow projects={projects} currentProjectId={currentProjectId} onClose={()=>setOpen(false)}/>}</>;
 }
 function HistoryWindow({projects,currentProjectId,onClose}:{projects:Project[];currentProjectId?:string;onClose:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null),generation=useRef(0),controller=useRef<AbortController|null>(null);
@@ -27,7 +27,7 @@ function HistoryWindow({projects,currentProjectId,onClose}:{projects:Project[];c
   <div className="completion-history-feed" aria-busy={loading}>
    {error&&<div className="completion-history-error" role="alert">{error}<button type="button" onClick={()=>load()}>Retry</button></div>}
    {!items.length&&!loading&&!error&&<div className="completion-history-empty"><History size={28}/><p>No stage check-offs recorded{scope==='project'?' for this project':''} yet.</p><small>History starts with new check-offs. Earlier completion dates weren’t recorded.</small></div>}
-   <ol>{items.map(item=><li key={item.id}><CheckCircle2 size={19}/><div><strong>{item.stage}</strong><p>{item.song}</p><small>{item.client} · {item.project}</small><time dateTime={item.checkedAt}>{new Date(item.checkedAt).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'medium'})}</time></div></li>)}</ol>
+   <ol>{items.map(item=><li key={item.id}><CheckCircle2 size={19}/><div><strong>{item.stage}</strong><p>{item.song}</p><small>{item.client} · {item.project}</small><time dateTime={item.checkedAt}>{new Date(item.checkedAt).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'})}</time></div></li>)}</ol>
    {loading&&<p className="completion-history-loading" role="status">Loading history…</p>}{nextCursor&&!loading&&<button type="button" className="secondary history-load-more" onClick={()=>load(nextCursor)}>Load more</button>}
   </div>
  </dialog>;
