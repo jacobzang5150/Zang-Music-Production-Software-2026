@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DriveApi,DRIVE_FOLDER,type DriveFile} from '../lib/drive-files.ts';
-import {DriveFolderSetup,needsDriveFolderSetup} from '../lib/drive-folders.ts';
+import {DriveFolderSetup,needsDriveFolderSetup,listClientFolders} from '../lib/drive-folders.ts';
 import type {FolderReservation} from '../lib/drive-folders-schema.ts';
 function fixture(initial:DriveFile[]=[]){
  const files=new Map(initial.map(f=>[f.id,f]));const reservations=new Map<string,FolderReservation>();let serial=0,creates=0;let failName='';
@@ -88,4 +88,17 @@ test('client reassignment moves the same project folder with its files and reuse
 test('moving to a new client creates only its folder, without rebuilding deleted project subfolders',async()=>{
  const real=globalThis.fetch,f=fixture([{id:'old',name:'Old Artist',mimeType:DRIVE_FOLDER},{id:'album',name:'Album',mimeType:DRIVE_FOLDER,parents:['old']},{id:'master',name:'Master.wav',mimeType:'audio/wav',parents:['album']}]);globalThis.fetch=f.fetchMock;
  try{const result=await (await manager()).moveProjectToClient('album','New Artist');assert.equal(result?.parent.name,'New Artist');assert.equal(f.creates,1);assert.deepEqual(f.files.get('master')?.parents,['album']);assert(![...f.files.values()].some(f=>f.name==='EDITS'));f.files.get('album')!.trashed=true;assert.equal(await (await manager()).moveProjectToClient('album','Another Artist'),null);assert.equal(f.creates,1);f.files.delete('album');await assert.rejects((await manager()).moveProjectToClient('album','Another Artist'));assert.equal(f.creates,1)}finally{globalThis.fetch=real}
+});
+test('workspace directory only returns registered live client folders with their current names',async()=>{
+ const real=globalThis.fetch,f=fixture([{id:'private',name:'Personal',mimeType:DRIVE_FOLDER},{id:'notes',name:'Notes',mimeType:'text/plain'}]);globalThis.fetch=f.fetchMock;
+ try{
+  const m=await manager();
+  const a=await m.project({id:'a',client:'Artist',name:'Album'});
+  await m.project({id:'b',client:'Artist',name:'Another album'});
+  const b=await m.project({id:'c',client:'Former client',name:'Older album'});
+  f.files.delete(b.file.parents![0]);f.files.get(a.file.parents![0])!.name='New artist name';
+  const count=f.creates;
+  const files=await listClientFolders(m.api,new AbortController().signal);
+  assert.deepEqual(files.map(x=>x.name),['New artist name']);assert.equal(f.creates,count);
+ }finally{globalThis.fetch=real}
 });
