@@ -11,7 +11,7 @@ export async function folderRequest<T>(method:string,body?:unknown):Promise<T>{
  const data=await r.json() as T&{error?:string};if(!r.ok)throw new Error(data.error||'Could not save Drive folder setup.');return data as T;
 }
 export async function listClientFolders(api:DriveApi,signal:AbortSignal) {
- const about=await (await api.request('about?fields=user(permissionId)',{signal})).json();
+ const about=await (await api.request('about?fields=user(permissionId)',{signal})).json() as {user?:{permissionId?:string}};
  const account=about.user?.permissionId;
  if(!account)throw new Error('Could not identify your Google Drive account.');
  const records=await folderRequest<FolderReservation[]>('GET');
