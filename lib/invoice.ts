@@ -4,7 +4,7 @@ import type {SavedBudget} from './budget-sharing.ts';
 import type {Project} from './projects.ts';
 const money=z.number().finite().min(0).max(1e12);
 export const InvoiceSchema=z.object({
- id:z.string().min(1).max(200),number:z.string().min(1).max(80),payee:z.literal('Jacob Zang'),
+ id:z.string().min(1).max(200),number:z.string().min(1).max(80),payee:z.string().min(1).max(200),
  billTo:z.string().trim().min(1).max(1000),projectTitle:z.string().max(3000),
  projects:z.array(z.object({id:z.string().max(80),client:z.string().max(120),name:z.string().max(160)})).min(1).max(1000),
  issuedAt:z.string().datetime(),dueAt:z.string().datetime(),budgetRevision:z.number().int().positive(),
@@ -42,5 +42,5 @@ export function createInvoice(project:Project,budget:SavedBudget,now=new Date(),
  const projects=budget.linkedProjects?.length?budget.linkedProjects:[{id:project.id,client:project.client,name:project.name}];
  const lines=invoiceLines(readBudgetModel(budget)).map(line=>{const old=previous?.lines.find(item=>item.id===line.id);return old?{...line,included:old.included}:line});
  const issuedAt=previous?.issuedAt||now.toISOString();
- return InvoiceSchema.parse({id:budget.budgetKey||'project:'+project.id,number:previous?.number||'0000',payee:'Jacob Zang',billTo:previous?.billTo||[...new Set(projects.map(p=>p.client))].join(' / '),projectTitle:projects.map(p=>p.name).join(', '),projects,issuedAt,dueAt:invoiceDueDate(project,projects,issuedAt,previous,allProjects),budgetRevision:budget.revision,amountReceived:previous?.amountReceived||0,notes:previous?.notes||'',lines});
+ return InvoiceSchema.parse({id:budget.budgetKey||'project:'+project.id,number:previous?.number||'0000',payee:previous?.payee||'Studio',billTo:previous?.billTo||[...new Set(projects.map(p=>p.client))].join(' / '),projectTitle:projects.map(p=>p.name).join(', '),projects,issuedAt,dueAt:invoiceDueDate(project,projects,issuedAt,previous,allProjects),budgetRevision:budget.revision,amountReceived:previous?.amountReceived||0,notes:previous?.notes||'',lines});
 }

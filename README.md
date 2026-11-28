@@ -1,3 +1,7 @@
+# Record Room
+
+For the multi-user Vercel beta, see [Record Room beta setup](RECORD_ROOM_BETA.md). The original deployment notes are preserved below.
+
 # Session — Zang Music Production Software 2026
 
 Private music production workspace for clients, LPs, EPs and singles. React, TypeScript and Vinext serve the app through Sites; all production project records are stored in Supabase Postgres.

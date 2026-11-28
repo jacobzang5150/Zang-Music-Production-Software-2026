@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createBudget} from '../lib/budget.ts';
+import {createBudget} from './legacy-budget.ts';
 import {readBudgetModel,groupBudgetRows,setBudgetDropdown,budgetTotal,newBudgetLine} from '../lib/budget-model.ts';
 import {moveBudgetRow} from '../lib/budget-order.ts';
 import {emptyBudgetHistory,recordBudgetChange,undoBudgetChange,redoBudgetChange} from '../lib/budget-history.ts';

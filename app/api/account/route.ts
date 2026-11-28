@@ -1,0 +1,7 @@
+import {getChatGPTUser} from '../../chatgpt-auth';
+import {serverAuth} from '@/lib/rr-server';
+import {settingsSchema} from '@/lib/rr-settings';
+const denied=()=>Response.json({error:'A verified beta invitation is required.'},{status:403});
+export async function GET(){const u=await getChatGPTUser();if(!u)return denied();const db=await serverAuth();const {data,error}=await db.from('rr_profiles').select('settings').eq('owner',u.id).maybeSingle();return error?Response.json({error:'Could not load settings.'},{status:503}):Response.json({settings:data?.settings??null,email:u.email,id:u.id})}
+export async function PUT(req:Request){const u=await getChatGPTUser();if(!u)return denied();const data=settingsSchema.safeParse(await req.json());if(!data.success)return Response.json({error:'Check your name and folder names (12 maximum).'}, {status:400});const {error}=await (await serverAuth()).from('rr_profiles').upsert({owner:u.id,settings:data.data});return Response.json(error?{error:'Could not save settings.'}:{settings:data.data},{status:error?503:200})}
+export async function DELETE(req:Request){const u=await getChatGPTUser();if(!u)return denied();const {confirm}=await req.json() as {confirm?:string};if(confirm!==u.email)return Response.json({error:'Type the current account email to confirm deletion.'},{status:400});const {error}=await (await serverAuth()).rpc('rr_delete_self');return Response.json(error?{error:'Account deletion failed. Your records were not removed.'}:{ok:true},{status:error?503:200})}

@@ -8,10 +8,11 @@ import type {Project} from '@/lib/projects';
 type SavedProject=Project&{revision:number};
 const signature=(p:SavedProject)=>JSON.stringify([p.id,p.client,p.name,!!p.driveClientPending,p.deliverablesUrl||'',p.driveSharingProcessedUrl||'']);
 const needsWork=(p:SavedProject)=>needsDriveFolderSetup(p)||needsDriveLinkSharing(p)||!!p.deliverablesUrl;
-export function useDriveFolders(projects:SavedProject[],paused:boolean,onSaved:(p:SavedProject)=>void){
+export function useDriveFolders(projects:SavedProject[],paused:boolean,onSaved:(p:SavedProject)=>void,folderNames:string[],share:boolean){
  const [token,setToken]=useState<string|null>(null),[running,setRunning]=useState(false),[message,setMessage]=useState(''),[errors,setErrors]=useState<string[]>([]),[epoch,setEpoch]=useState(0);
  const state=useRef({projects,paused,onSaved});state.current={projects,paused,onSaved};
  const working=useRef(false),alive=useRef(true),completed=useRef(new Set<string>()),failed=useRef(new Set<string>()),setup=useRef<DriveFolderSetup|null>(null),sharedClients=useRef(new Set<string>());
+ useEffect(()=>{setup.current=null;completed.current.clear();failed.current.clear();setEpoch(n=>n+1)},[folderNames,share]);
  useEffect(()=>{alive.current=true;const auth=()=>{setToken(currentDriveToken());completed.current.clear();failed.current.clear();setup.current=null;sharedClients.current.clear();setErrors([])};auth();window.addEventListener('session-drive-auth',auth);const stop=keepDriveConnected();return()=>{stop();alive.current=false;window.removeEventListener('session-drive-auth',auth)}},[]);
  useEffect(()=>{
   if(!token||paused||working.current)return;
@@ -25,20 +26,20 @@ export function useDriveFolders(projects:SavedProject[],paused:boolean,onSaved:(
      try{
       let saved=project;
       if(needsDriveFolderSetup(project)){
-       if(!setup.current){const manager=new DriveFolderSetup(new DriveApi(token));await manager.initialize();if(currentDriveToken()!==token)break;setup.current=manager}
+       if(!setup.current){const manager=new DriveFolderSetup(new DriveApi(token),folderNames);await manager.initialize();if(currentDriveToken()!==token)break;setup.current=manager}
        const folder=await setup.current.project(project);
        if(!alive.current||currentDriveToken()!==token||state.current.paused)break;
        saved=await folderRequest<SavedProject>('PATCH',{projectId:project.id,reservationId:folder.reservation.id,expectedUrl:project.deliverablesUrl||''});
        // Persist the link before sharing. A sharing failure must never trigger folder setup again.
        state.current.onSaved(saved);
       }
-      if(needsDriveLinkSharing(saved)){
+      if(share&&needsDriveLinkSharing(saved)){
        await new DriveApi(token).shareFolderByLink(saved.deliverablesUrl!);
        if(!alive.current||currentDriveToken()!==token||state.current.paused)break;
        const response=await fetch('/api/projects',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:saved.id,url:saved.deliverablesUrl})});
        const result=await response.json() as SavedProject&{error?:string};if(!response.ok)throw new Error(result.error||'Could not save the link-sharing status.');saved=result;
       }
-      await shareProjectClientFolder(new DriveApi(token),saved,sharedClients.current);
+      if(share)await shareProjectClientFolder(new DriveApi(token),saved,sharedClients.current);
       if(!alive.current||currentDriveToken()!==token||state.current.paused)break;
       completed.current.add(before);completed.current.add(signature(saved));state.current.onSaved(saved);
      }catch(e){

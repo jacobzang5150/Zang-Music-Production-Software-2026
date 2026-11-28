@@ -1,8 +1,8 @@
-import {env} from 'cloudflare:workers';
+const env=process.env;
 import {getChatGPTUser} from '../../../chatgpt-auth';
 import {callStudioDatabase} from '@/lib/supabase';
 import {openDriveToken,sealDriveToken,validDriveMutation} from '@/lib/drive-token-vault';
-const ORIGIN='https://studio-project-tracker.jacobzang5150.chatgpt.site';
+const ORIGIN=process.env.RECORD_ROOM_ORIGIN||'';
 const SCOPE='https://www.googleapis.com/auth/drive';
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store','Pragma':'no-cache','Vary':'Cookie'}});
 const configured=()=>!!env.GOOGLE_DRIVE_CLIENT_ID&&!!env.GOOGLE_DRIVE_CLIENT_SECRET&&!!env.GOOGLE_DRIVE_TOKEN_KEY;
@@ -13,7 +13,7 @@ async function exchange(parameters:Record<string,string>){
  const data=await r.json() as {access_token?:string;refresh_token?:string;expires_in?:number;scope?:string;error?:string};return {ok:r.ok,data};
 }
 export async function GET(){
- const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Session first.'},401);
+ const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Record Room first.'},401);
  if(!configured())return reply({connected:false});
  try{
   const record=await connection(user.userId);if(!record)return reply({connected:false});
@@ -25,7 +25,7 @@ export async function GET(){
  }catch{return reply({error:'Could not restore the Drive connection. Please retry.'},503)}
 }
 export async function POST(req:Request){
- const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Session first.'},401);
+ const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Record Room first.'},401);
  if(!validDriveMutation(req,ORIGIN))return reply({error:'Invalid connection request.'},403);
  if(!configured())return reply({error:'Remembered Drive connections need the Google OAuth client secret.'},503);
  try{
@@ -35,7 +35,7 @@ export async function POST(req:Request){
   if(!ok||!data.access_token)return reply({error:'Google authorization failed. Please connect again.'},400);
   if(!data.scope?.split(' ').includes(SCOPE))return reply({error:'Allow Drive access to connect your project folders.'},400);
   // Never reuse a previous account's refresh token if Google omitted a new one.
-  if(!data.refresh_token)return reply({error:'Google did not grant a remembered connection. Remove Session from your Google account’s third-party connections, then connect again.'},400);
+  if(!data.refresh_token)return reply({error:'Google did not grant a remembered connection. Remove Record Room from your Google account’s third-party connections, then connect again.'},400);
   const sealed=await sealDriveToken(env.GOOGLE_DRIVE_TOKEN_KEY!,user.userId,data.refresh_token);
   const saved=await callStudioDatabase({owner:user.userId,resource:'driveAuth',action:'save',project:{id:'connection',sealed},revision:previous?.revision||0});
   if(!saved.ok)return reply({error:'Could not remember this connection. Please try again.'},saved.status);
@@ -43,7 +43,7 @@ export async function POST(req:Request){
  }catch{return reply({error:'Could not complete Google authorization. Please try again.'},503)}
 }
 export async function DELETE(req:Request){
- const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Session first.'},401);
+ const user=await getChatGPTUser();if(!user)return reply({error:'Sign in to Record Room first.'},401);
  if(!validDriveMutation(req,ORIGIN))return reply({error:'Invalid disconnect request.'},403);
  try{const r=await callStudioDatabase({owner:user.userId,resource:'driveAuth',action:'delete'});return r.ok?reply({ok:true}):reply({error:'Could not forget the connection. Please retry.'},503)}catch{return reply({error:'Could not forget the connection. Please retry.'},503)}
 }

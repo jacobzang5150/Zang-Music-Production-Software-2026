@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {BudgetSchema,createBudget} from '../lib/budget.ts';
+import {BudgetSchema,createBudget} from './legacy-budget.ts';
 import {signGatewayRequest,verifyGatewayRequest} from '../lib/gateway-auth.ts';
 test('budget preserves supplied fields, numeric rates, empty quantities and dependent formulas',()=>{
  const a=createBudget({id:'test',client:'Artist',name:'Record'}),b=createBudget({id:'other',client:'B',name:'EP'});const cells=a.sheets[0].data as Record<string,unknown>[][];

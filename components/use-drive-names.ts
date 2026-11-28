@@ -41,7 +41,7 @@ export function useDriveNames(projects:Saved[],paused:boolean,onSaved:(p:Saved)=
       }
       if(p.driveNamePending&&folder.name!==p.name){folder=await api.rename(folder.id,p.name);if(!valid())break;}
       if(!p.driveClientPending&&folder.name===p.name&&!p.driveNamePending&&p.driveNameSynced===p.name)continue;
-      if(!folder.name.trim()||folder.name.length>160)throw new Error('Use a folder name of 1–160 characters to sync with Session.');
+      if(!folder.name.trim()||folder.name.length>160)throw new Error('Use a folder name of 1–160 characters to sync with Record Room.');
       const saved=await fetch('/api/projects',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id,url:p.deliverablesUrl,clientSync:p.driveClientPending?{expectedClient:p.client,expectedClientId:p.clientId}:undefined,nameSync:{expectedName:p.name,expectedPending:!!p.driveNamePending,name:folder.name}})});
       const result=await saved.json() as Saved&{error?:string};if(!saved.ok)throw new Error(result.error||'Could not sync the folder name.');
       if(alive.current){state.current.onSaved(result);window.dispatchEvent(new CustomEvent('session-drive-name-synced',{detail:{id:folder.id,name:folder.name,parent:clientFolder?.parent}}));}

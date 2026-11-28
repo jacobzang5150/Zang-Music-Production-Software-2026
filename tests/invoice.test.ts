@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {invoiceLines,invoiceTotals,createInvoice} from '../lib/invoice.ts';
 import {invoiceHtml} from '../lib/invoice-print.ts';
-import {createBudget} from '../lib/budget.ts';
+import {createBudget} from './legacy-budget.ts';
 import {readBudgetModel,writeBudgetModel,type BudgetLine} from '../lib/budget-model.ts';
 import {newProject,paymentStatus,applyDeliveryTransition} from '../lib/projects.ts';
 const line=(id:string,name:string,rate:number,quantity=1,extra:Partial<BudgetLine>={}):BudgetLine=>({id,name,details:'',rate,quantity,unit:'hour',...extra});
@@ -16,7 +16,7 @@ test('invoices select Jacob fees and exclude third-party costs, including nested
  const {project,budget,model}=fixture(),items=invoiceLines(model);
  assert.deepEqual(items.filter(line=>line.included).map(line=>line.name),['Producer/Engineer','Electric Guitar','Mixing']);
  const invoice=createInvoice(project,budget,new Date('2026-11-07T19:00:00Z'));
- assert.equal(invoiceTotals(invoice).total,1240);assert.equal(invoice.dueAt,'2026-12-07T18:00:00.000Z');assert.equal(invoice.payee,'Jacob Zang');
+ assert.equal(invoiceTotals(invoice).total,1240);assert.equal(invoice.dueAt,'2026-12-07T18:00:00.000Z');assert.equal(invoice.payee,'Studio');
  const withCosts={...invoice,lines:invoice.lines.map(line=>['recording:gregg','recording:gear'].includes(line.id)?{...line,included:true}:line),amountReceived:200};
  assert.deepEqual(invoiceTotals(withCosts),{fees:1240,expenses:210,total:1450,received:200,balance:1250});assert.equal(invoiceTotals(withCosts,true).balance,0);
  assert.equal(invoiceTotals(invoice).expenses,0);
@@ -29,7 +29,7 @@ test('linked projects use one budget identity and refreshing preserves choices a
 });
 test('print output excludes unselected expenses and escapes client text',()=>{
  const {project,budget}=fixture(),invoice=createInvoice(project,budget);invoice.billTo='<script>alert(1)</script>';
- const html=invoiceHtml(invoice);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('Recording Studio Rental'));assert(html.includes('$1,240'));assert(html.includes('Checks made payable to Jacob Zang'));
+ const html=invoiceHtml(invoice);assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('Recording Studio Rental'));assert(html.includes('$1,240'));assert(!html.includes('Checks made payable to Jacob Zang'));
 });
 
 test('invoicing before delivery does not start the clock; delivery updates the due date',()=>{

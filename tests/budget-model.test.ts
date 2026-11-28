@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import {BudgetSchema,createBudget} from '../lib/budget.ts';
+import {BudgetSchema,createBudget} from './legacy-budget.ts';
 import {readBudgetModel,writeBudgetModel,BudgetModelSchema,lineTotal,sectionTotal,budgetTotal,budgetRemaining,groupBudgetRows,setBudgetDropdown} from '../lib/budget-model.ts';
 import {exportBudgetExcel,importBudgetExcel} from '../lib/budget-excel.ts';
 const project={id:'project',client:'Artist',name:'Record'};

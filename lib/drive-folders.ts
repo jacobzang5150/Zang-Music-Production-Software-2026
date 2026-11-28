@@ -13,7 +13,7 @@ export async function folderRequest<T>(method:string,body?:unknown):Promise<T>{
 /** Supabase elects one pre-generated Drive ID before any create request is sent. */
 export class DriveFolderSetup{
  api:DriveApi;account='';root='';records=new Map<string,FolderReservation>();verified=new Map<string,DriveFile>();
- constructor(api:DriveApi){this.api=api}
+ folderNames:string[];constructor(api:DriveApi,folderNames=['EDITS','MIXES','MASTERS']){this.api=api;this.folderNames=folderNames}
  async initialize(){
   const about=await (await this.api.request('about?fields=user(permissionId)')).json() as {user:{permissionId:string}};
   if(!about.user?.permissionId)throw new Error('Could not identify your Google Drive account.');this.account=about.user.permissionId;
@@ -79,7 +79,7 @@ export class DriveFolderSetup{
  async project(project:{id:string;client:string;name:string}){
   const client=await this.ensure('client:'+normalizeFolderName(project.client),project.client.trim(),this.root,true);
   const folder=await this.ensure('project:'+project.id,project.name.trim(),client.file.id);
-  for(const name of ['EDITS','MIXES','MASTERS'])await this.ensure('child:'+folder.file.id+':'+name,name,folder.file.id);
+  for(const name of this.folderNames)await this.ensure('child:'+folder.file.id+':'+name,name,folder.file.id);
   return folder;
  }
 }

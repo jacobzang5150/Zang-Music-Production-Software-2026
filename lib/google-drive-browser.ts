@@ -63,14 +63,14 @@ export function connectDrive(config:DriveConfig):Promise<string>{
       if(!response.ok||!result.accessToken)throw new Error(result.error||'Could not remember this Drive connection.');
       resolve(rememberSession(result.accessToken,result.expiresIn||3600));
      }catch(e){reject(e)}
-    },error_callback:e=>reject(new Error(e.type==='popup_closed'?'Google sign-in was closed.':'Allow popups for Session, then try connecting again.'))});
+    },error_callback:e=>reject(new Error(e.type==='popup_closed'?'Google sign-in was closed.':'Allow popups for Record Room, then try connecting again.'))});
    client.requestCode();return;
   }
   const client=window.google.accounts.oauth2.initTokenClient({client_id:config.clientId,scope:DRIVE_SCOPE,include_granted_scopes:false,callback:r=>{
    if(r.error||!r.access_token)return reject(new Error(r.error_description||r.error||'Google authorization was not completed.'));
    if(!r.scope?.split(' ').includes(DRIVE_SCOPE))return reject(new Error('Drive access was not granted. Reconnect and allow access to manage your files.'));
    session={token:r.access_token,expiresAt:Date.now()+Math.max(0,(r.expires_in||3600)-60)*1000};window.dispatchEvent(new Event('session-drive-auth'));resolve(r.access_token);
-  },error_callback:e=>reject(new Error(e.type==='popup_closed'?'Google sign-in was closed.':e.type==='popup_failed_to_open'?'Allow popups for Session, then try Connect Google Drive again.':'Google sign-in could not open.'))});
+  },error_callback:e=>reject(new Error(e.type==='popup_closed'?'Google sign-in was closed.':e.type==='popup_failed_to_open'?'Allow popups for Record Room, then try Connect Google Drive again.':'Google sign-in could not open.'))});
   client.requestAccessToken({prompt:'select_account'});
  });
 }
