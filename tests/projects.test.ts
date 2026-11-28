@@ -223,3 +223,8 @@ test('client changes queue a Drive move and unrelated edits preserve the pending
  assert.equal(driveClientPendingAfterSave({...p,driveClientPending:true},{...p,driveClientPending:false}),false);
  assert.equal(driveClientPendingAfterSave(undefined,p),undefined);
 });
+test('priority changes queue order only when selected',()=>{
+ const high={...p,id:'high',priority:5,priorityEnabled:true},low={...p,id:'low',priority:1,priorityEnabled:true};
+ assert.deepEqual(rankProjects([low,p,high],now).map(r=>r.id),['high','p','low']);
+ assert.equal(score({...high,priorityEnabled:false},now),score(p,now));
+});

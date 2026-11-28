@@ -9,7 +9,7 @@ import {ClientSchema} from './clients.ts';
 import {ProjectSchema,applyDeliveryTransition,driveNamePendingAfterSave,driveClientPendingAfterSave,type Project} from './projects.ts';
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 export type StudioRequest=Omit<GatewayClaims,'aud'|'exp'|'iat'>;
-export async function operate(claims:StudioRequest,secret:string,url:string){
+export async function operate(claims:StudioRequest,secret:string,url:string,seedBudget:(p:Parameters<typeof createBudget>[0])=>Promise<ReturnType<typeof createBudget>>=async p=>createBudget(p)){
  try{
     const headers:Record<string,string>={apikey:secret,'Content-Type':'application/json',Prefer:'return=representation'};
     if(!secret.startsWith('sb_secret_'))headers.Authorization='Bearer '+secret;
@@ -62,10 +62,14 @@ export async function operate(claims:StudioRequest,secret:string,url:string){
       if(!['list','save','import'].includes(claims.action))return reply({error:'Invalid budget operation'},400);
       const q=base();q.set('id','eq.'+id);const projects=await getRows('studio_projects',q);
       if(!projects.length)return reply({error:'Project not found'},404);
-      let seed=claims.action==='list'?createBudget(projects[0].data):parsed?.success?parsed.data:null;
+      async function missingSeed(p:Parameters<typeof createBudget>[0]){
+        const q=base();q.set('id','eq.'+p.id);q.set('select','id');
+        return (await getRows('studio_budgets',q)).length?createBudget(p):await seedBudget(p)
+      }
+      let seed=claims.action==='list'?await missingSeed(projects[0].data):parsed?.success?parsed.data:null;
       if(link?.success&&link.data.action==='link'){
         const target=base();target.set('id','eq.'+link.data.targetId);const rows=await getRows('studio_projects',target);
-        if(!rows.length)return reply({error:'Project not found'},404);seed=createBudget(rows[0].data);
+        if(!rows.length)return reply({error:'Project not found'},404);seed=await missingSeed(rows[0].data);
       }
       if(claims.action==='save'&&(!Number.isInteger(claims.revision)||claims.revision!<1))return reply({error:'Invalid revision'},400);
       const r=await fetch(root+'rpc/studio_budget_operation',{method:'POST',headers,body:JSON.stringify({p_owner:claims.owner,p_id:id,p_action:link?.success?link.data.action:claims.action==='list'?'read':'save',p_data:seed,p_revision:link?.success?link.data.revision:claims.revision??null,p_key:link?.success?link.data.budgetKey:claims.budgetKey??null,p_target:link?.success?link.data.targetId??null:null})});
@@ -145,7 +149,7 @@ export async function operate(claims:StudioRequest,secret:string,url:string){
         if(!r.ok)return reply({error:r.status===409?'Record already exists. Reload before editing.':'Unable to save record'},r.status===409?409:502);
         if(resource==='projects'){
           // Initialization is idempotent; opening a legacy project also creates its budget.
-          try{await fetch(root+'studio_budgets?on_conflict=owner,id',{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({owner:claims.owner,id:p.id,data:createBudget(p as Project),revision:1})});}catch{console.warn('Budget initialization deferred until first open');}
+          try{await fetch(root+'studio_budgets?on_conflict=owner,id',{method:'POST',headers:{...headers,Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({owner:claims.owner,id:p.id,data:await seedBudget(p as Project),revision:1})});}catch{console.warn('Budget initialization deferred until first open');}
         }
         return reply({...p,revision:claims.action==='import'?revision:1});
       }
