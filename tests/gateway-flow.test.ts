@@ -75,7 +75,7 @@ test('gateway integrates saved clients, ownership, revision checks, delivery and
   r=await call('invoices','save',{project:{...invoice,amountReceived:50},revision:1},'owner-b');assert.equal(r.status,409);
   r=await call('invoices','save',{project:{...invoice,amountReceived:50},revision:1});assert.equal(r.status,200);assert.equal(r.data.revision,2);
   r=await call('invoices','save',{project:invoice,revision:1});assert.equal(r.status,409);
-  r=await call('invoices','save',{project:{...invoice,payee:'Someone else'},revision:2});assert.equal(r.status,400);
+  r=await call('invoices','save',{project:{...invoice,payee:''},revision:2});assert.equal(r.status,400);
   r=await call('invoices','delete',{id:invoice.id,revision:2});assert.equal(r.status,400);
 
   const reservation={id:'a'.repeat(64),account:'google-account',folderId:'folder-one',parent:'root',name:'Album',mayCreate:true};

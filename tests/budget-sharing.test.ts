@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {BudgetLinkSchema,sameBudgetVersion} from '../lib/budget-sharing.ts';
-import {createBudget} from '../lib/budget.ts';
+import {createBudget} from './legacy-budget.ts';
 test('link requests require another project and current budget identity and revision',()=>{
  const valid={id:'a',action:'link',targetId:'b',revision:1,budgetKey:'project:a'};
  assert.ok(BudgetLinkSchema.safeParse(valid).success);

@@ -10,10 +10,27 @@ export async function folderRequest<T>(method:string,body?:unknown):Promise<T>{
  const r=await fetch('/api/drive/folders',{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store'});
  const data=await r.json() as T&{error?:string};if(!r.ok)throw new Error(data.error||'Could not save Drive folder setup.');return data as T;
 }
+export async function listClientFolders(api:DriveApi,signal:AbortSignal) {
+ const about=await (await api.request('about?fields=user(permissionId)',{signal})).json();
+ const account=about.user?.permissionId;
+ if(!account)throw new Error('Could not identify your Google Drive account.');
+ const records=await folderRequest<FolderReservation[]>('GET');
+ const matches=await Promise.all(records.filter(r=>r.account===account).map(async r=>
+  r.id===await folderKey(account,'client:'+normalizeFolderName(r.name))?r.folderId:null));
+ const ids=[...new Set(matches.filter((id):id is string=>id!==null))],files:DriveFile[]=[];
+ for(let i=0;i<ids.length;i+=6){
+  signal.throwIfAborted();
+  const batch=await Promise.all(ids.slice(i,i+6).map(async id=>{
+   try{return await api.get(id,signal)}catch(e){if(e instanceof DriveError&&(e.status===404||(e.status===403&&!/limit|quota/i.test(e.message))))return null;throw e}
+  }));
+  for(const file of batch)if(file&&!file.trashed&&file.mimeType===DRIVE_FOLDER)files.push(file);
+ }
+ return files.sort((a,b)=>a.name.localeCompare(b.name));
+}
 /** Supabase elects one pre-generated Drive ID before any create request is sent. */
 export class DriveFolderSetup{
  api:DriveApi;account='';root='';records=new Map<string,FolderReservation>();verified=new Map<string,DriveFile>();
- constructor(api:DriveApi){this.api=api}
+ folderNames:string[];constructor(api:DriveApi,folderNames=['EDITS','MIXES','MASTERS']){this.api=api;this.folderNames=folderNames}
  async initialize(){
   const about=await (await this.api.request('about?fields=user(permissionId)')).json() as {user:{permissionId:string}};
   if(!about.user?.permissionId)throw new Error('Could not identify your Google Drive account.');this.account=about.user.permissionId;
@@ -79,7 +96,7 @@ export class DriveFolderSetup{
  async project(project:{id:string;client:string;name:string}){
   const client=await this.ensure('client:'+normalizeFolderName(project.client),project.client.trim(),this.root,true);
   const folder=await this.ensure('project:'+project.id,project.name.trim(),client.file.id);
-  for(const name of ['EDITS','MIXES','MASTERS'])await this.ensure('child:'+folder.file.id+':'+name,name,folder.file.id);
+  for(const name of this.folderNames)await this.ensure('child:'+folder.file.id+':'+name,name,folder.file.id);
   return folder;
  }
 }

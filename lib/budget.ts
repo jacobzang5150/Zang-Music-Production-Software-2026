@@ -4,7 +4,7 @@ import {z} from 'zod';
 export const BudgetSchema=z.object({id:z.string().min(1).max(80),sheets:z.array(z.object({name:z.string().min(1).max(100),id:z.string().optional()}).passthrough()).min(1).max(20),templateTitle:z.boolean().default(false)}).refine(p=>JSON.stringify(p).length<=2_000_000,'This workbook is too large. Use a workbook under 2 MB of cell data.');
 export type Budget=z.infer<typeof BudgetSchema>;
 
-export function createBudget(project:{id:string;client:string;name:string}):Budget{
+export function createBudget(project:{id:string;client:string;name:string},legacyRates=false):Budget{
  const data:Record<string,unknown>[][]=Array.from({length:40},()=>Array.from({length:13},()=>({v:'',bg:'#19171b',fc:'#eee5ed',ff:'DM Sans',fs:11,vt:0,tb:1})));
  const put=(r:number,c:number,v:string|number,style:Record<string,unknown>={})=>{data[r-1][c-1]={...data[r-1][c-1],v,m:typeof v==='number'?v.toFixed(2):v,...style}};
  put(1,1,`${project.client} - ${project.name}`,{fs:18,bl:1,ff:'Space Grotesk'});
@@ -29,7 +29,7 @@ export function createBudget(project:{id:string;client:string;name:string}):Budg
   [12,'Producer/Engineer','Jacob Zang',80,'hr'],[13,'Home Overdubs','Electric Guitar',100,'song'],[14,'','Acoustic Guitar',50,'song'],[15,'','Keys',75,'song'],[16,'','Bass',50,'song'],[17,'','Percussion',25,''],[18,'Studio Musicians','',null,'song'],
   [23,'Editing','',80,'hr'],[24,'Melodyne','',80,'hr'],[25,'Mixing','',80,'hr'],[26,'Mastering','',100,'song']
  ];
- for(const [r,label,person,rate,unit] of rows){put(r,1,label);put(r,3,person);if(rate!==null)put(r,5,rate,{m:`$${rate.toFixed(2)}${unit?'/'+unit:''}`,ct:{fa:unit?`$0.00"/${unit}"`:'$#,##0.00',t:'n'}});}
+ for(const [r,label,person,rate,unit] of rows){put(r,1,label);put(r,3,person==="Jacob Zang"&&!legacyRates?"":person);if(legacyRates&&rate!==null)put(r,5,rate,{m:`$${rate.toFixed(2)}${unit?'/'+unit:''}`,ct:{fa:unit?`$0.00"/${unit}"`:'$#,##0.00',t:'n'}});}
  put(3,8,'Dates:',{bl:1,fc:'#f38fa9'});merged(3,8,1,4);put(3,12,'Hours',{bl:1,fc:'#f38fa9'});merged(3,12,1,2);
  for(let r=4;r<=29;r++){merged(r,8,1,4);merged(r,12,1,2);put(r,8,'',{bg:'#211a20'});put(r,12,'',{bg:'#211a20',ct:{fa:'0.00',t:'n'}});}
  put(29,1,'Total',{bl:1,fs:14});merged(29,1,1,4);put(29,7,0,{...money,f:'=SUM(G9,G19,G27)',bl:1,fs:14,bg:'#842c43'});

@@ -3,7 +3,7 @@ import {PDFDocument,PDFName,PDFRawStream,PDFDict,decodePDFRawStream,StandardFont
 import {invoiceTotals,type Invoice} from './invoice.ts';
 import {invoiceDate,invoiceFilename,invoiceMoney,invoiceTerms,invoicePrintRows} from './invoice-print.ts';
 export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:Uint8Array,fonts?:{body:Uint8Array;heading:Uint8Array}):Promise<Uint8Array>{
- const pdf=await PDFDocument.create();pdf.setTitle(invoiceFilename(invoice).slice(0,-4));pdf.setAuthor('Jacob Zang');pdf.setSubject(invoice.projectTitle);pdf.setCreator('Session');
+ const pdf=await PDFDocument.create();pdf.setTitle(invoiceFilename(invoice).slice(0,-4));pdf.setAuthor(invoice.payee);pdf.setSubject(invoice.projectTitle);pdf.setCreator('Record Room');
  pdf.registerFontkit(fontkit);
  const body=await pdf.embedFont(fonts?.body||StandardFonts.Helvetica,{subset:true}),head=await pdf.embedFont(fonts?.heading||StandardFonts.TimesRomanBold,{subset:false});
  const brand=brandBytes?await pdf.embedPng(brandBytes):null;
@@ -23,9 +23,9 @@ export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:
  }
  const centered=(value:string,x:number,maxWidth:number,top:number,size=12,font=body)=>draw(value,x+(maxWidth-width(value,size,font))/2,top,size,font);
  function tableHeader(top:number){centered('Description',36,205,top,fontSize.column,head);centered('Unit Price',241,130,top,fontSize.column,head);centered('Quantity',371,85,top,fontSize.column,head);centered('Total',456,120,top,fontSize.column,head);return top+28}
- function continuation(table=true){page=pdf.addPage([612,792]);draw('Jacob Zang',36,32,17,head);right(invoice.number,576,35,11);y=table?tableHeader(67):67}
+ function continuation(table=true){page=pdf.addPage([612,792]);draw(invoice.payee,36,32,17,head);right(invoice.number,576,35,11);y=table?tableHeader(67):67}
  if(brand)page.drawImage(brand,{x:36,y:792-128,width:540,height:76});
- else{centered('Jacob Zang',36,540,62,28,head);centered('Guitarist/Producer/Engineer',36,540,97,13)}
+ else{centered(invoice.payee,36,540,62,28,head);centered('Production studio',36,540,97,13)}
  const recipient=wrap('Bill To: '+invoice.billTo,290,fontSize.metadata,head);recipient.forEach((line,index)=>draw(line,36,178+index*18,fontSize.metadata,head));
  let metadataY=178;
  for(const value of ['Project: '+invoice.projectTitle,'Invoice No: '+invoice.number,'Invoice Date: '+invoiceDate(invoice.issuedAt),'Due Date: '+invoiceDate(invoice.dueAt)]){
@@ -70,7 +70,7 @@ export async function generateInvoicePdf(invoice:Invoice,paid=false,brandBytes?:
  return pdf.save();
 }
 export async function downloadInvoicePdf(invoice:Invoice,paid=false){
- const assets=await Promise.all(['/invoice-brand.png','/invoice-fonts/arian-lt-demi.ttf','/invoice-fonts/copperplate-pdf.otf'].map(async path=>{const response=await fetch(path);if(!response.ok)throw new Error('Could not load invoice formatting. Please retry.');return new Uint8Array(await response.arrayBuffer())}));
- const bytes=await generateInvoicePdf(invoice,paid,assets[0],{body:assets[1],heading:assets[2]});
+ const assets=await Promise.all(['/invoice-fonts/arian-lt-demi.ttf','/invoice-fonts/copperplate-pdf.otf'].map(async path=>{const response=await fetch(path);if(!response.ok)throw new Error('Could not load invoice formatting. Please retry.');return new Uint8Array(await response.arrayBuffer())}));
+ const bytes=await generateInvoicePdf(invoice,paid,undefined,{body:assets[0],heading:assets[1]});
  const url=URL.createObjectURL(new Blob([new Uint8Array(bytes)],{type:'application/pdf'})),link=document.createElement('a');link.href=url;link.download=invoiceFilename(invoice);document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }

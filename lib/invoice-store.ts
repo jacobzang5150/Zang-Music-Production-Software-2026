@@ -1,3 +1,4 @@
+import {serverAuth} from './rr-server';
 import {callStudioDatabase} from './supabase';
 import {createInvoice,invoiceDueDate,type SavedInvoice} from './invoice';
 import type {Project} from './projects';
@@ -18,6 +19,8 @@ export async function ensureInvoice(owner:string,id:string){
  let invoice=await findInvoice(owner,key);
  if(!invoice){
   const draft=createInvoice(context.project,context.budget,new Date(),undefined,context.projects);
+  const {data}=await (await serverAuth()).from('rr_profiles').select('settings').eq('owner',owner.slice(5)).single();
+  if(!data)throw Error('Complete studio setup first.');draft.payee=[data.settings.first,data.settings.last].join(' ').trim();
   const saved=await callStudioDatabase({owner,resource:'invoices',action:'save',project:draft,revision:0});
   if(saved.status===409){await saved.body?.cancel();invoice=await findInvoice(owner,key);if(!invoice)throw new Error('Invoice changed. Please retry.');}
   else invoice=await checked<SavedInvoice>(saved);
